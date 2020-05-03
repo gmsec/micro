@@ -5,6 +5,8 @@ import (
 	"fmt"
 	proto "gmicro/rpc"
 
+	"github.com/xxjwxc/public/tools"
+
 	"google.golang.org/grpc/metadata"
 )
 
@@ -19,6 +21,6 @@ func (h *hello) SayHello(ctx context.Context, req *proto.HelloRequest) (*proto.H
 	fmt.Println(ctx.Value("WROLD"))
 	fmt.Println(req)
 	return &proto.HelloReply{
-		Message: "aaaaaaaa",
+		Message: tools.GetRandomString(8),
 	}, nil
 }

@@ -75,6 +75,7 @@ func (p *pool) getConn(addr string, opts ...grpc.DialOption) (*poolConn, error) 
 		p.conns[addr] = sp
 	}
 
+	// fmt.Println("=======pool_len:", sp.count)
 	//  while we have conns check streams and then return one
 	//  otherwise we'll create a new conn
 	conn := sp.head.next

@@ -64,8 +64,7 @@ func main() {
 }
 
 func run() {
-	service := micro.GetService()
-	client := service.Client()
+	client := micro.GetService().Client()
 	conn, err := client.Next()
 	defer conn.Close()
 	if err != nil {
@@ -77,17 +76,16 @@ func run() {
 	r := rand.Intn(500)
 	request.Name = fmt.Sprintf("%v", r)
 
-	ctx := context.WithValue(context.Background(), "HELLO", "WROLD12")
-	ctx = context.WithValue(ctx, "WROLD", "HELLO22")
+	ctx := context.Background()
 
 	for i := 0; i < 10; i++ {
-		_, err := say.SayHello(ctx, &request)
+		resp, err := say.SayHello(ctx, &request)
 		if err != nil {
 			mylog.Error(err)
-			fmt.Println("======2222222222====err:", err)
+			fmt.Println("==========err:", err)
 		}
-		//fmt.Println(resp, _err)
-		time.Sleep(3 * time.Second)
+		fmt.Println(resp)
+		time.Sleep(1 * time.Second)
 	}
 }
 
