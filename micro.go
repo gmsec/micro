@@ -1,10 +1,13 @@
 package micro
 
 import (
+	"fmt"
 	"os"
 	"os/signal"
 	"sync"
 	"syscall"
+
+	"github.com/xxjwxc/public/mylog"
 
 	"github.com/gmsec/micro/client"
 	"github.com/gmsec/micro/profile"
@@ -65,7 +68,11 @@ func newService(opts ...Option) Service {
 	s := &service{
 		opts: options,
 	}
-	initService(s)
+	if !IsExist(s.Name()) {
+		initService(s.Name(), s)
+	} else {
+		mylog.Info(fmt.Sprintf("service [%v] existed.", s.Name()))
+	}
 	return s
 }
 

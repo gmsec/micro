@@ -4,7 +4,9 @@ package proto
 
 import (
 	context "context"
-
+	micro "github.com/gmsec/micro"
+	client "github.com/gmsec/micro/client"
+	server "github.com/gmsec/micro/server"
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
@@ -13,13 +15,16 @@ import (
 // Reference imports to suppress errors if they are not otherwise used.
 var _ context.Context
 var _ grpc.ClientConnInterface
+var _ server.Server
+var _ client.Client
+var _ micro.Service
 
 // This is a compile-time assertion to ensure that this generated file
 // is compatible with the grpc package it is being compiled against.
 const _ = grpc.SupportPackageIsVersion6
 
 // HelloClient is the client API for Hello service.
-// tttttttsssss
+//
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://godoc.org/google.golang.org/grpc#ClientConn.NewStream.
 type HelloClient interface {
 	// 定义SayHello方法
@@ -27,16 +32,38 @@ type HelloClient interface {
 }
 
 type helloClient struct {
-	cc grpc.ClientConnInterface
+	cc client.Client
 }
 
-func NewHelloClient(cc grpc.ClientConnInterface) HelloClient {
+// GetHelloName get client name(package.class)
+func GetHelloName() string {
+	return "proto.Hello"
+}
+
+// GetHelloClient get client by clientname
+func GetHelloClient() HelloClient {
+	cc := micro.GetClient(GetHelloName())
+	return &helloClient{cc}
+}
+
+// GetHelloClientByName get client by custom name
+func GetHelloClientByName(name string) HelloClient {
+	cc := micro.GetClient(name)
+	return &helloClient{cc}
+}
+
+func NewHelloClient(cc client.Client) HelloClient {
 	return &helloClient{cc}
 }
 
 func (c *helloClient) SayHello(ctx context.Context, in *HelloRequest, opts ...grpc.CallOption) (*HelloReply, error) {
+	conn, err := c.cc.Next()
+	defer conn.Close()
+	if err != nil {
+		return nil, err
+	}
 	out := new(HelloReply)
-	err := c.cc.Invoke(ctx, "/proto.Hello/SayHello", in, out, opts...)
+	err = conn.Invoke(ctx, "/proto.Hello/SayHello", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -57,8 +84,8 @@ func (*UnimplementedHelloServer) SayHello(context.Context, *HelloRequest) (*Hell
 	return nil, status.Errorf(codes.Unimplemented, "method SayHello not implemented")
 }
 
-func RegisterHelloServer(s *grpc.Server, srv HelloServer) {
-	s.RegisterService(&_Hello_serviceDesc, srv)
+func RegisterHelloServer(s server.Server, srv HelloServer) {
+	s.GetServer().RegisterService(&_Hello_serviceDesc, srv)
 }
 
 func _Hello_SayHello_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {

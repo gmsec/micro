@@ -38,7 +38,7 @@ func main() {
 		//micro.WithRegistryNameing(reg),
 	)
 	if tag == "server" {
-		proto.RegisterHelloServer(service.Server().GetServer(), &hello{})
+		proto.RegisterHelloServer(service.Server(), &hello{})
 		// run server
 		if err := service.Run(); err != nil {
 			panic(err)
@@ -64,13 +64,8 @@ func main() {
 }
 
 func run() {
-	client := micro.GetService().Client()
-	conn, err := client.Next()
-	defer conn.Close()
-	if err != nil {
-		fmt.Println(err)
-	}
-	say := proto.NewHelloClient(conn)
+	micro.SetClientServiceName(proto.GetHelloName(), "lp.srv.eg2") // set client group
+	say := proto.GetHelloClient()
 
 	var request proto.HelloRequest
 	r := rand.Intn(500)

@@ -17,4 +17,4 @@ require (
 	google.golang.org/protobuf v1.21.0
 )
 
-// replace github.com/gmsec/micro => ../
+replace github.com/gmsec/micro => ../
