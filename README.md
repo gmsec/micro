@@ -1,3 +1,5 @@
+[![Coverage Status](https://coveralls.io/repos/github/gmsec/micro/badge.svg?branch=master)](https://coveralls.io/github/gmsec/micro?branch=master)
+
 # micro
 A Go distributed systems development framework
 
