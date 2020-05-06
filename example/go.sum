@@ -36,8 +36,6 @@ github.com/erikstmartin/go-testdb v0.0.0-20160219214506-8d10e4a1bae5/go.mod h1:a
 github.com/ezbuy/tgen v0.0.0-20180109020500-95ef13895032/go.mod h1:OeW1N0acAlRaGTlOG8jRZZUKEtyiGa0qvD+lWNWb9vs=
 github.com/fsnotify/fsnotify v1.4.7/go.mod h1:jwhsz4b93w/PPRr/qN1Yymfu8t87LnFCMoQvtojpjFo=
 github.com/gin-gonic/gin v1.1.4/go.mod h1:7cKuhb5qV2ggCFctp2fJQ+ErvciLZrIeoOSOm6mUr7Y=
-github.com/gmsec/micro v0.0.0-20200503055139-b07d022c10b4 h1:3pfs//XOeWH77fvsUq6+SIPJLmqcn5c7DRupBJK0C84=
-github.com/gmsec/micro v0.0.0-20200503055139-b07d022c10b4/go.mod h1:pcabvFOVBHnT9I/pQHLC0clJhLmwJr00mw9O1sp3a9s=
 github.com/go-kit/kit v0.8.0/go.mod h1:xBxKIO96dXMWWy0MnWVtmwkA9/13aqxPnvrjFYMA2as=
 github.com/go-logfmt/logfmt v0.3.0/go.mod h1:Qt1PoO58o5twSAckw1HlFXLmHsOX5/0LbT9GBnD5lWE=
 github.com/go-sql-driver/mysql v1.4.1/go.mod h1:zAC/RDZ24gD3HViQzih4MyKcchzm+sOG5ZlKdlhCg5w=
