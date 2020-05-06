@@ -128,6 +128,7 @@ func (r *DNSNamingRegister) Deregister() error {
 	return nil
 }
 
+// Resolve resolve begin
 func (r *DNSNamingRegister) Resolve(target string) (naming.Watcher, error) {
 	r.ctx, r.cancel = context.WithCancel(context.Background())
 	// w := &dnsNamingWatcher{
@@ -249,6 +250,7 @@ func (r *DNSNamingRegister) Init(opts ...Option) error {
 	return nil
 }
 
+// Options get opts list
 func (r *DNSNamingRegister) Options() Options {
 	return r.opts
 }

@@ -5,6 +5,7 @@ import (
 	"time"
 )
 
+// Options opts define
 type Options struct {
 	Addrs   []string
 	Timeout time.Duration
@@ -17,6 +18,7 @@ type Options struct {
 	Context context.Context
 }
 
+// Option opts list func
 type Option func(*Options)
 
 // type RegisterOptions struct {

@@ -111,6 +111,7 @@ func (p *profiler) String() string {
 	return "pprof"
 }
 
+// NewProfile new profile
 func NewProfile(opts ...profile.Option) profile.Profile {
 	var options profile.Options
 	for _, o := range opts {

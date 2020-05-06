@@ -17,6 +17,7 @@ type httpProfile struct {
 }
 
 var (
+	// DefaultAddress ...
 	DefaultAddress = ":6060"
 )
 
@@ -60,6 +61,7 @@ func (h *httpProfile) String() string {
 	return "http"
 }
 
+// NewProfile ...
 func NewProfile(opts ...profile.Option) profile.Profile {
 	mux := http.NewServeMux()
 

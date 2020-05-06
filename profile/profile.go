@@ -1,6 +1,7 @@
 // Package profile is for profilers
 package profile
 
+// Profile list
 type Profile interface {
 	// Start the profiler
 	Start() error
@@ -11,6 +12,7 @@ type Profile interface {
 }
 
 var (
+	// DefaultProfile ...
 	DefaultProfile Profile = new(noop)
 )
 
@@ -28,11 +30,13 @@ func (p *noop) String() string {
 	return "noop"
 }
 
+// Options opts define
 type Options struct {
 	// Name to use for the profile
 	Name string
 }
 
+// Option opts list
 type Option func(o *Options)
 
 // Name of the profile
