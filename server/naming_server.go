@@ -141,29 +141,26 @@ func (s *namingResolver) Stop() error {
 	return nil
 }
 
-func (g *namingResolver) String() string {
+// String name string
+func (s *namingResolver) String() string {
 	return "naming_resolver"
 }
 
-func (g *namingResolver) GetServer() *grpc.Server {
-	g.Lock()
-	defer g.Unlock()
+// GetServer get server
+func (s *namingResolver) GetServer() *grpc.Server {
+	s.Lock()
+	defer s.Unlock()
 
-	if g.opts.Server == nil {
-		g.opts.Server = grpc.NewServer()
+	if s.opts.Server == nil {
+		s.opts.Server = grpc.NewServer()
 	}
 
-	return g.opts.Server
+	return s.opts.Server
 }
 
-func (g *namingResolver) GetListener() net.Listener {
-	g.Lock()
-	g.Unlock()
-	return g.opts.Listener
-}
-
-func (g *namingResolver) getListener() net.Listener {
-	g.Lock()
-	g.Unlock()
-	return g.opts.getListener()
+// GetListener listener
+func (s *namingResolver) GetListener() net.Listener {
+	s.Lock()
+	s.Unlock()
+	return s.opts.Listener
 }

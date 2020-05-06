@@ -21,16 +21,24 @@ type Server interface {
 	GetListener() net.Listener
 }
 
+// Option option list
 type Option func(*Options)
 
 var (
-	DefaultAddress                 = ":0"
-	DefaultName                    = "go.micro.server"
-	DefaultVersion                 = "latest"
-	DefaultId                      = uuid.New().String()
-	DefaultNamingServer     Server = newNamingServer()
-	DefaultRegisterInterval        = time.Second * 30
-	DefaultRegisterTTL             = time.Minute
+	// DefaultAddress default addr
+	DefaultAddress = ":0"
+	// DefaultName default name
+	DefaultName = "go.micro.server"
+	// DefaultVersion version
+	DefaultVersion = "latest"
+	// DefaultID node of id
+	DefaultID = uuid.New().String()
+	// DefaultNamingServer ...
+	DefaultNamingServer Server = newNamingServer()
+	// DefaultRegisterInterval ...
+	DefaultRegisterInterval = time.Second * 30
+	// DefaultRegisterTTL ...
+	DefaultRegisterTTL = time.Minute
 
 	// NewServer creates a new server
 	NewServer func(...Option) Server = newNamingServer

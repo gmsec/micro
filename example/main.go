@@ -64,7 +64,7 @@ func main() {
 }
 
 func run() {
-	micro.SetClientServiceName(proto.GetHelloName(), "lp.srv.eg2") // set client group
+	micro.SetClientServiceName(proto.GetHelloName(), "lp.srv.eg1") // set client group
 	say := proto.GetHelloClient()
 
 	var request proto.HelloRequest

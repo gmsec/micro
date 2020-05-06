@@ -73,7 +73,7 @@ func newOptions(opt ...Option) Options {
 	}
 
 	if len(opts.ID) == 0 {
-		opts.ID = DefaultId
+		opts.ID = DefaultID
 	}
 
 	if len(opts.Version) == 0 {
