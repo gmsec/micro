@@ -11,6 +11,9 @@ framework eference resources base on [go-micro](https://github.com/micro/go-micr
 - [pool](https://github.com/micro/go-micro/blob/master/client/grpc/grpc_pool.go)
 - [etcdv3](https://github.com/etcd-io/etcd)
 
-# next
+# install
 
-- 
+- code tools: [protoc-gen-gmsec](https://github.com/gmsec/protoc-gen-gmsec) 
+
+- example :[example](https://github.com/gmsec/micro/tree/master/example)
+

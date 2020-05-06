@@ -1,7 +1,9 @@
 NAME := gmsec
 gen:# 编译hello.proto
 	protoc --proto_path="./apidoc/proto/hello/" --gmsec_out=plugins=gmsec:./rpc/ hello.proto
-source_build:
+install:
+	./proto_install.sh
+source_install:
 	./proto_install.sh
 build:
-	./proto_install.sh
+	go build *.go
