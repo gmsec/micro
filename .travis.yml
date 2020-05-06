@@ -3,6 +3,8 @@ go:
   - 1.13.x
   - master
 
+go_import_path: github.com/gmsec/micro
+
 before_install:
   - go get -t -v ./...
 
@@ -10,4 +12,4 @@ script:
   - go test -race -coverprofile=coverage.txt -covermode=atomic
 
 after_success:
-  - bash <(curl -s https://codecov.io/bash) -t cd178ea9-bd26-4a05-a98f-adcbf12c8cb6
+  - bash <(curl -s https://codecov.io/bash)
