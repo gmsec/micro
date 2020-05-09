@@ -3,7 +3,7 @@ module gmicro
 go 1.14
 
 require (
-	github.com/gmsec/micro v0.0.0-20200509130645-f8071e02a29e
+	github.com/gmsec/micro v0.0.0-20200509132353-c4ecace717cb
 	github.com/golang/protobuf v1.4.1
 	github.com/gookit/color v1.2.5 // indirect
 	github.com/miekg/dns v1.1.29 // indirect
