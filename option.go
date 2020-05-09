@@ -33,13 +33,13 @@ type Options struct {
 
 // newOptions default of option define
 func newOptions(opts ...Option) Options {
-	reg := registry.NewDNSNamingRegistry()
+	// reg := registry.NewDNSNamingRegistry()
 	opt := Options{
 		Client: client.DefaultNamingClient,
 		Server: server.DefaultNamingServer,
-		Registry: &registry.Registry{
-			RegNaming: reg,
-		},
+		// Registry: &registry.Registry{
+		// 	RegNaming: reg,
+		// },
 		Context: context.Background(),
 	}
 

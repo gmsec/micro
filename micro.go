@@ -70,6 +70,8 @@ func newService(opts ...Option) Service {
 	s := &service{
 		opts: options,
 	}
+	s.Init()
+
 	if !IsExist(s.Name()) {
 		initService(s.Name(), s)
 	} else {
