@@ -50,7 +50,7 @@ func newOptions(opts ...Option) Options {
 	return opt
 }
 
-// WithName of the service . 指定服务名(group)
+// WithName of the service . Specify service name (Group)
 func WithName(n string) Option {
 	return func(o *Options) {
 		o.Server.Init(server.Name(n))
@@ -59,7 +59,7 @@ func WithName(n string) Option {
 	}
 }
 
-// WithRegisterTTL the service with a TTL .指定服务注册时间
+// WithRegisterTTL the service with a TTL
 func WithRegisterTTL(t time.Duration) Option {
 	return func(o *Options) {
 		o.Server.Init(server.RegisterTTL(t))
@@ -67,14 +67,14 @@ func WithRegisterTTL(t time.Duration) Option {
 	}
 }
 
-// WithRegisterInterval the service with at interval.让服务在指定时间内重新注册
+// WithRegisterInterval the service with at interval.
 func WithRegisterInterval(t time.Duration) Option {
 	return func(o *Options) {
 		o.Server.Init(server.RegisterInterval(t))
 	}
 }
 
-// WithRegistryNameing 注册naming 服务发现
+// WithRegistryNameing Register for naming service discovery
 func WithRegistryNameing(reg registry.RegNaming) Option {
 	return func(o *Options) {
 		o.Server = server.DefaultNamingServer

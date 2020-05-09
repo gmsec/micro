@@ -4,16 +4,18 @@ import (
 	"fmt"
 	"testing"
 	"time"
+
+	"github.com/gmsec/micro/registry"
 )
 
 func TestMain(t *testing.T) {
-	// reg := registry.NewDNSNamingRegistry()
+	reg := registry.NewDNSNamingRegistry()
 	// 初始化服务
 	service := NewService(
 		WithName("lp.srv.eg1"),
-		// micro.WithRegisterTTL(time.Second*30),      //指定服务注册时间
+		WithRegisterTTL(time.Second*30),      //指定服务注册时间
 		WithRegisterInterval(time.Second*15), //让服务在指定时间内重新注册
-		//micro.WithRegistryNameing(reg),
+		WithRegistryNameing(reg),
 	)
 
 	// server
@@ -28,5 +30,12 @@ func TestMain(t *testing.T) {
 
 	// client
 	SetClientServiceName("proto.Hello", "lp.srv.eg1") // set client group
+	GetService("lp.srv.eg1")
+	GetClient("proto.Hello")
 
+	service.Client()
+	service.Server()
+	service.Init()
+	service.String()
+	service.Stop()
 }
