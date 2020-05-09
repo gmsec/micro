@@ -65,7 +65,7 @@ func SetClientServiceName(clientName, serviceName string) {
 	_cliGroup[clientName] = serviceName
 }
 
-// IsExist 是否存在
+// IsExist existed
 func IsExist(name string) bool {
 	mut.RLock()
 	defer mut.RUnlock()
