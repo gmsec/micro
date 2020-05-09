@@ -69,10 +69,10 @@ func (s *namingResolver) Init(opts ...Option) error {
 // NewSubscriber(string, interface{}, ...SubscriberOption) Subscriber
 // Subscribe(Subscriber) error
 func (s *namingResolver) Start() error {
-	lis := s.opts.getListener()
 	gs := s.GetServer()
 	s.Lock()
 	defer s.Unlock()
+	lis := s.opts.getListener()
 
 	if s.started {
 		return nil
