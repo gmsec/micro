@@ -166,11 +166,11 @@ func (s *service) String() string {
 
 // Start starts the default server
 func (s *service) Start() error {
-	for _, fn := range s.BeforeStart {
-		if err := fn(); err != nil {
-			return err
-		}
-	}
+	// for _, fn := range s.BeforeStart {
+	// 	if err := fn(); err != nil {
+	// 		return err
+	// 	}
+	// }
 
 	///start func
 	s.opts.Server.Start()
@@ -179,11 +179,11 @@ func (s *service) Start() error {
 
 	/// -------
 
-	for _, fn := range s.AfterStart {
-		if err := fn(); err != nil {
-			return err
-		}
-	}
+	// for _, fn := range s.AfterStart {
+	// 	if err := fn(); err != nil {
+	// 		return err
+	// 	}
+	// }
 
 	return nil
 }
@@ -192,19 +192,19 @@ func (s *service) Start() error {
 func (s *service) Stop() error {
 	var gerr error
 
-	for _, fn := range s.BeforeStop {
-		if err := fn(); err != nil {
-			gerr = err
-		}
-	}
+	// for _, fn := range s.BeforeStop {
+	// 	if err := fn(); err != nil {
+	// 		gerr = err
+	// 	}
+	// }
 
 	s.opts.Server.Stop()
 
-	for _, fn := range s.AfterStop {
-		if err := fn(); err != nil {
-			gerr = err
-		}
-	}
+	// for _, fn := range s.AfterStop {
+	// 	if err := fn(); err != nil {
+	// 		gerr = err
+	// 	}
+	// }
 
 	return gerr
 }

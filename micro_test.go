@@ -2,6 +2,7 @@ package micro
 
 import (
 	"fmt"
+	"os"
 	"testing"
 	"time"
 
@@ -10,13 +11,15 @@ import (
 
 func TestMain(t *testing.T) {
 	reg := registry.NewDNSNamingRegistry()
+
+	os.Setenv("MICRO_DEBUG_PROFILE", "true")
 	// 初始化服务
 	service := NewService(
 		WithName("lp.srv.eg1"),
 		WithRegisterTTL(time.Second*30),      //指定服务注册时间
 		WithRegisterInterval(time.Second*15), //让服务在指定时间内重新注册
-		WithRegistryNameing(reg),
 	)
+	service.Init(WithRegistryNameing(reg))
 
 	// server
 	go func() {
@@ -33,9 +36,13 @@ func TestMain(t *testing.T) {
 	GetService("lp.srv.eg1")
 	GetClient("proto.Hello")
 
+	service.Options()
 	service.Client()
 	service.Server()
-	service.Init()
 	service.String()
 	service.Stop()
+
+	// process, _ := os.FindProcess(os.Getpid())
+	// process.Signal(syscall.SIGTERM)
+	// time.Sleep(1 * time.Second)
 }
