@@ -164,3 +164,7 @@ func (s *namingResolver) GetListener() net.Listener {
 	s.Unlock()
 	return s.opts.Listener
 }
+
+func (s *namingResolver) SetAddress(add string) {
+	s.opts.Address = add
+}

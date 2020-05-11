@@ -19,6 +19,7 @@ type Server interface {
 	String() string
 	GetServer() *grpc.Server
 	GetListener() net.Listener
+	SetAddress(add string)
 }
 
 // Option option list

@@ -36,6 +36,9 @@ type Service interface {
 	String() string
 	// stop
 	Stop() error
+
+	// stop signal
+	NotifyStop()
 }
 
 type service struct {
@@ -47,6 +50,8 @@ type service struct {
 	BeforeStop  []func() error
 	AfterStart  []func() error
 	AfterStop   []func() error
+
+	cc chan os.Signal
 }
 
 // Option  ...
@@ -149,12 +154,12 @@ func (s *service) Run() error {
 		return err
 	}
 
-	ch := make(chan os.Signal, 1)
-	signal.Notify(ch, syscall.SIGTERM, syscall.SIGINT, syscall.SIGQUIT)
+	s.cc = make(chan os.Signal, 1)
+	signal.Notify(s.cc, syscall.SIGTERM, syscall.SIGINT, syscall.SIGQUIT)
 
 	select {
 	// wait on kill signal
-	case <-ch:
+	case <-s.cc:
 	// wait on context cancel
 	case <-s.opts.Context.Done():
 	}
@@ -190,8 +195,14 @@ func (s *service) Start() error {
 	return nil
 }
 
+// NotifyStop 发送停止信号
+func (s *service) NotifyStop() {
+	s.cc <- syscall.SIGINT
+}
+
 // Stop stops the default server
 func (s *service) Stop() error {
+
 	var gerr error
 
 	// for _, fn := range s.BeforeStop {
