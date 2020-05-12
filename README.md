@@ -1,5 +1,8 @@
-<!-- [![Coverage Status](https://coveralls.io/repos/github/gmsec/micro/badge.svg?branch=master)](https://coveralls.io/github/gmsec/micro?branch=master) -->
 [![Build Status](https://travis-ci.org/gmsec/micro.svg?branch=master)](https://travis-ci.org/gmsec/micro)
+[![Go Report Card](https://goreportcard.com/badge/github.com/gmsec/micro)](https://goreportcard.com/report/github.com/gmsec/micro)
+[![GoDoc](https://godoc.org/github.com/gmsec/micro?status.svg)](https://godoc.org/github.com/gmsec/micro)
+[![Mentioned in Awesome Go](https://awesome.re/mentioned-badge.svg)](https://github.com/avelino/awesome-go) 
+ 
 
 # micro
 A Go distributed systems development framework
