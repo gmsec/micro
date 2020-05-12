@@ -74,6 +74,7 @@ func newService(opts ...Option) Service {
 
 	s := &service{
 		opts: options,
+		cc:   make(chan os.Signal, 1),
 	}
 	s.Init()
 
@@ -154,7 +155,7 @@ func (s *service) Run() error {
 		return err
 	}
 
-	s.cc = make(chan os.Signal, 1)
+	// s.cc = make(chan os.Signal, 1)
 	signal.Notify(s.cc, syscall.SIGTERM, syscall.SIGINT, syscall.SIGQUIT)
 
 	select {
