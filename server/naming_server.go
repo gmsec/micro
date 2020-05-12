@@ -161,8 +161,8 @@ func (s *namingResolver) GetServer() *grpc.Server {
 // GetListener listener
 func (s *namingResolver) GetListener() net.Listener {
 	s.Lock()
-	s.Unlock()
-	return s.opts.Listener
+	defer s.Unlock()
+	return s.opts.getListener()
 }
 
 func (s *namingResolver) SetAddress(add string) {
