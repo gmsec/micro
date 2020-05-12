@@ -164,14 +164,15 @@ func (r *DNSNamingRegister) Next() ([]*naming.Update, error) {
 	r.Lock()
 	defer r.Unlock()
 
-	// if w.node == nil {
-	// 	return nil, fmt.Errorf("nil porint")
-	// }
-
 	if !r.isInit { // first
 		r.isInit = true
 		timeout := r.opts.Timeout
-		defer func() { r.opts.Timeout = timeout }()
+		defer func() {
+			if timeout > time.Second*3 {
+				timeout = time.Second * 3
+			}
+			r.opts.Timeout = timeout
+		}()
 		r.opts.Timeout = time.Millisecond * 100
 		return r.getService()
 	}
