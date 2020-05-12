@@ -130,6 +130,8 @@ func (r *DNSNamingRegister) Deregister() error {
 
 // Resolve resolve begin
 func (r *DNSNamingRegister) Resolve(target string) (naming.Watcher, error) {
+	r.Lock()
+	defer r.Unlock()
 	r.ctx, r.cancel = context.WithCancel(context.Background())
 	// w := &dnsNamingWatcher{
 	// 	node:        dnr.node,
