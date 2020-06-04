@@ -113,8 +113,8 @@ func (s *service) Init(opts ...Option) {
 		s.opts.Registry = &registry.Registry{
 			RegNaming: registry.NewDNSNamingRegistry(),
 		}
-		s.opts.Server.Init(server.WithRegistryNameing(s.opts.Registry.RegNaming))
-		s.opts.Client.Init(client.WithRegistryNameing(s.opts.Registry.RegNaming))
+		s.opts.Server.Init(server.WithRegistryNaming(s.opts.Registry.RegNaming))
+		s.opts.Client.Init(client.WithRegistryNaming(s.opts.Registry.RegNaming))
 	}
 
 	// init registry parms

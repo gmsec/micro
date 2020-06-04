@@ -47,8 +47,8 @@ func newDNSNamingRegistry(opts ...Option) RegNaming {
 	options := Options{
 		Context:     context.Background(),
 		Timeout:     time.Millisecond * 100,
-		nodeID:      uuid.New().String(),
-		serviceName: "gmsec.service",
+		NodeID:      uuid.New().String(),
+		ServiceName: "gmsec.service",
 	}
 	for _, o := range opts {
 		o(&options)
@@ -69,7 +69,7 @@ func newDNSNamingRegistry(opts ...Option) RegNaming {
 }
 
 func (r *DNSNamingRegister) String() string {
-	return r.opts.serviceName
+	return r.opts.ServiceName
 }
 
 //Register register & add new node
@@ -97,8 +97,8 @@ func (r *DNSNamingRegister) Register(address string, Metadata interface{}) error
 	}
 
 	s, err := mdns.NewMDNSService(
-		r.opts.nodeID,
-		r.opts.serviceName,
+		r.opts.NodeID,
+		r.opts.ServiceName,
 		r.domain+".",
 		"",
 		port,
@@ -187,7 +187,7 @@ func (r *DNSNamingRegister) getService() ([]*naming.Update, error) {
 	entries := make(chan *mdns.ServiceEntry, 10)
 	done := make(chan bool)
 
-	p := mdns.DefaultParams(r.opts.serviceName)
+	p := mdns.DefaultParams(r.opts.ServiceName)
 	// set context with timeout
 	var cancel context.CancelFunc
 	p.Context, cancel = context.WithTimeout(context.Background(), r.opts.Timeout)

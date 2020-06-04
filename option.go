@@ -74,15 +74,15 @@ func WithRegisterInterval(t time.Duration) Option {
 	}
 }
 
-// WithRegistryNameing Register for naming service discovery
-func WithRegistryNameing(reg registry.RegNaming) Option {
+// WithRegistryNaming Register for naming service discovery
+func WithRegistryNaming(reg registry.RegNaming) Option {
 	return func(o *Options) {
 		o.Server = server.DefaultNamingServer
 		o.Client = client.DefaultNamingClient
 		o.Registry = &registry.Registry{
 			RegNaming: reg,
 		}
-		o.Server.Init(server.WithRegistryNameing(o.Registry.RegNaming))
-		o.Client.Init(client.WithRegistryNameing(o.Registry.RegNaming))
+		o.Server.Init(server.WithRegistryNaming(o.Registry.RegNaming))
+		o.Client.Init(client.WithRegistryNaming(o.Registry.RegNaming))
 	}
 }

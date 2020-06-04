@@ -19,7 +19,7 @@ func TestMain(t *testing.T) {
 		WithRegisterTTL(time.Second*30),      //指定服务注册时间
 		WithRegisterInterval(time.Second*15), //让服务在指定时间内重新注册
 	)
-	service.Init(WithRegistryNameing(reg))
+	service.Init(WithRegistryNaming(reg))
 
 	// server
 	go func() {

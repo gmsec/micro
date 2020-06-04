@@ -11,8 +11,8 @@ type Options struct {
 	Timeout time.Duration
 	// Secure      bool
 	// TLSConfig   *tls.Config
-	nodeID      string
-	serviceName string
+	NodeID      string
+	ServiceName string
 	// Other options for implementations of the interface
 	// can be stored in a context
 	Context context.Context
@@ -81,13 +81,13 @@ func WithTimeout(t time.Duration) Option {
 // WithServiceName 设置服务名字
 func WithServiceName(name string) Option {
 	return func(o *Options) {
-		o.serviceName = name
+		o.ServiceName = name
 	}
 }
 
 // WithNodeID 设置节点id
 func WithNodeID(nodeID string) Option {
 	return func(o *Options) {
-		o.nodeID = nodeID
+		o.NodeID = nodeID
 	}
 }

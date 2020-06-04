@@ -73,8 +73,8 @@ func WithPoolTTL(d time.Duration) Option {
 	}
 }
 
-// WithRegistryNameing 注册naming 服务发现
-func WithRegistryNameing(reg registry.RegNaming) Option {
+// WithRegistryNaming 注册naming 服务发现
+func WithRegistryNaming(reg registry.RegNaming) Option {
 	return func(o *Options) {
 		o.Registry = &registry.Registry{
 			RegNaming: reg,
