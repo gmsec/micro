@@ -11,12 +11,14 @@ import (
 
 var mut sync.RWMutex
 var _mp map[string]Service
+var _IpAddrMp map[string]client.Client
 
 var _cliMut sync.RWMutex
 var _cliGroup map[string]string
 
 func init() {
 	_mp = make(map[string]Service)
+	_IpAddrMp = make(map[string]client.Client)
 	_cliGroup = make(map[string]string)
 }
 
@@ -50,6 +52,12 @@ func GetClient(clientName string) client.Client {
 		serverName = _cliGroup[clientName]
 	}
 
+	// if  _IpAddrMp
+	c, ok := _IpAddrMp[clientName]
+	if ok {
+		return c
+	}
+
 	s := GetService(serverName)
 	if s != nil {
 		return s.Client()
@@ -77,4 +85,16 @@ func initService(name string, s *service) {
 	mut.Lock()
 	defer mut.Unlock()
 	_mp[name] = s
+}
+
+// SetClientServiceAddr set service address with client name
+func SetClientServiceAddr(clientName, serviceName string) {
+	SetClientServiceName(clientName, serviceName)
+	if !IsExist(clientName) {
+		mut.RLock()
+		defer mut.RUnlock()
+		tmp := client.DefaultIPAddrClient
+		tmp.Init(client.WithServiceName(serviceName))
+		_IpAddrMp[clientName] = tmp
+	}
 }

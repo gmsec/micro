@@ -36,7 +36,7 @@ func (c *namingResolver) Init(opts ...Option) error {
 		c.pool.Unlock()
 	}
 
-	if len(c.opts.serviceName) > 0 {
+	if len(c.opts.serviceName) > 0 && c.opts.Registry != nil {
 		// init registry parms
 		c.opts.Registry.RegNaming.Init(registry.WithServiceName(c.opts.serviceName),
 			registry.WithTimeout(c.opts.RegisterTTL),
@@ -58,11 +58,16 @@ func (c *namingResolver) String() string {
 
 // Next connon
 func (c *namingResolver) Next() (*poolConn, error) {
+	opt := []grpc.DialOption{
+		grpc.WithInsecure(),
+		grpc.WithBlock(),
+	}
 	// 开始注册
-	reg := c.opts.Registry.RegNaming
-	b := grpc.RoundRobin(reg)
+	if c.opts.Registry != nil {
+		opt = append(opt, grpc.WithBalancer(grpc.RoundRobin(c.opts.Registry.RegNaming)))
+	}
 
-	cc, err := c.pool.getConn(c.opts.serviceName, grpc.WithInsecure(), grpc.WithBalancer(b), grpc.WithBlock())
+	cc, err := c.pool.getConn(c.opts.serviceName, opt...)
 	if err != nil {
 		mylog.Error(err)
 		return nil, err

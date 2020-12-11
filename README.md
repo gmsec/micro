@@ -16,6 +16,7 @@ framework eference resources base on [go-micro](https://github.com/micro/go-micr
 - [dns](github.com/micro/mdns)
 - [pool](https://github.com/micro/go-micro/blob/master/client/grpc/grpc_pool.go)
 - [etcdv3](https://github.com/etcd-io/etcd)
+- [ipaddr](https://github.com/gmsec/micro/tree/master/example/main.go#80) It can be directly connected through IPaddr
 
 # install
 

@@ -45,11 +45,24 @@ func main() {
 		}
 		fmt.Println("stop service")
 	} else {
+		go func() { // 通过服务发现模块连接
+			wp := workpool.New(200)     //设置最大线程数
+			for i := 0; i < 2000; i++ { //开启20个请求
+				wp.Do(func() error {
+					widthRegistry()
+					return nil
+				})
+			}
+
+			wp.Wait()
+			fmt.Println("down")
+		}()
+
 		go func() {
 			wp := workpool.New(200)     //设置最大线程数
 			for i := 0; i < 2000; i++ { //开启20个请求
 				wp.Do(func() error {
-					run()
+					widthIPAddr()
 					return nil
 				})
 			}
@@ -63,7 +76,8 @@ func main() {
 	wait()
 }
 
-func run() {
+// 注册发现模块
+func widthRegistry() {
 	micro.SetClientServiceName(proto.GetHelloName(), "lp.srv.eg1") // set client group
 	say := proto.GetHelloClient()
 
@@ -75,6 +89,27 @@ func run() {
 
 	for i := 0; i < 10; i++ {
 		resp, err := say.SayHello(ctx, &request)
+		if err != nil {
+			mylog.Error(err)
+			fmt.Println("==========err:", err)
+		}
+		fmt.Println(resp)
+		time.Sleep(1 * time.Second)
+	}
+}
+
+// widthIPAddr 通过ip访问(非服务发现模式)
+func widthIPAddr() {
+	micro.SetClientServiceAddr(proto.GetHelloName(), "127.0.0.1:50051")
+	// micro.SetClientServiceName(proto.GetHelloName(), "lp.srv.eg1") // set client group
+	hello := proto.GetHelloClient()
+	var request proto.HelloRequest
+
+	ctx := context.Background()
+	for i := 0; i < 10; i++ {
+		r := rand.Intn(500)
+		request.Name = fmt.Sprintf("%v", r)
+		resp, err := hello.SayHello(ctx, &request)
 		if err != nil {
 			mylog.Error(err)
 			fmt.Println("==========err:", err)

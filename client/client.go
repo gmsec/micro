@@ -14,6 +14,7 @@ type Client interface {
 	Options() Options
 	String() string
 	Next() (*poolConn, error) // next connon
+	//IsIpAddr() bool
 	// Copy() *Client
 }
 
@@ -32,6 +33,8 @@ var (
 	DefaultPoolMaxIdle = 50
 	// DefaultNamingClient is a default client to use out of the box
 	DefaultNamingClient Client = newNamingClient()
+	// DefaultIPAddrClient is a default client to use addr to connection
+	DefaultIPAddrClient Client = newIPAddrClient()
 	// DefaultRetries is the default number of times a request is tried
 	DefaultRetries = 1
 	// DefaultRequestTimeout is the default request timeout
@@ -64,7 +67,24 @@ func newNamingClient(opts ...Option) Client {
 		// wg:          wait(options.Context),
 	}
 	// rc.once.Store(false)
-	rc.pool = newPool(options.PoolSize, options.PoolTTL, rc.poolMaxIdle(), rc.poolMaxStreams())
+	rc.pool = newPool(options.PoolSize, options.PoolTTL, rc.poolMaxIdle(), rc.poolMaxStreams(), false)
+
+	return rc
+}
+
+func newIPAddrClient(opts ...Option) Client {
+	options := newOptions(opts...)
+	rc := &namingResolver{
+		//opts: options,
+		// register:registry.NewDNSNamingRegistry()
+		// router:      router,
+		// handlers:    make(map[string]Handler),
+		// subscribers: make(map[Subscriber][]broker.Subscriber),
+		// exit:        make(chan chan error),
+		// wg:          wait(options.Context),
+	}
+	// rc.once.Store(false)
+	rc.pool = newPool(options.PoolSize, options.PoolTTL, rc.poolMaxIdle(), rc.poolMaxStreams(), true)
 
 	return rc
 }

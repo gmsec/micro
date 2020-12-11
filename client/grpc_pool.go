@@ -9,8 +9,9 @@ import (
 )
 
 type pool struct {
-	size int
-	ttl  int64
+	isIPAddr bool // if IP direct connection
+	size     int
+	ttl      int64
 
 	//  max streams on a *poolConn
 	maxStreams int
@@ -50,7 +51,7 @@ type poolConn struct {
 	in   bool
 }
 
-func newPool(size int, ttl time.Duration, idle int, ms int) *pool {
+func newPool(size int, ttl time.Duration, idle int, ms int, isIPAddr bool) *pool {
 	if ms <= 0 {
 		ms = 1
 	}
@@ -63,6 +64,7 @@ func newPool(size int, ttl time.Duration, idle int, ms int) *pool {
 		maxStreams: ms,
 		maxIdle:    idle,
 		conns:      make(map[string]*streamsPool),
+		isIPAddr:   isIPAddr,
 	}
 }
 
