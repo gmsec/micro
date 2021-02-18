@@ -13,13 +13,9 @@ var mut sync.RWMutex
 var _mp map[string]Service
 var _IpAddrMp map[string]client.Client
 
-var _cliMut sync.RWMutex
-var _cliGroup map[string]string
-
 func init() {
 	_mp = make(map[string]Service)
 	_IpAddrMp = make(map[string]client.Client)
-	_cliGroup = make(map[string]string)
 }
 
 // GetService get service
@@ -45,20 +41,13 @@ func GetService(name string) Service {
 
 // GetClient get client from cliet name
 func GetClient(clientName string) client.Client {
-	var serverName = ""
-	_cliMut.RLock()
-	defer _cliMut.RUnlock()
-	if _, ok := _cliGroup[clientName]; ok {
-		serverName = _cliGroup[clientName]
-	}
-
 	// if  _IpAddrMp
 	c, ok := _IpAddrMp[clientName]
 	if ok {
 		return c
 	}
 
-	s := GetService(serverName)
+	s := GetService("")
 	if s != nil {
 		return s.Client()
 	}
@@ -67,10 +56,13 @@ func GetClient(clientName string) client.Client {
 
 // SetClientServiceName set service name with client name
 func SetClientServiceName(clientName, serviceName string) {
-	_cliMut.Lock()
-	defer _cliMut.Unlock()
-
-	_cliGroup[clientName] = serviceName
+	if !IsExist(clientName) {
+		mut.RLock()
+		defer mut.RUnlock()
+		tmp := client.DefaultNamingClient
+		tmp.Init(client.WithServiceName(serviceName))
+		_IpAddrMp[clientName] = tmp
+	}
 }
 
 // IsExist existed
@@ -88,13 +80,12 @@ func initService(name string, s *service) {
 }
 
 // SetClientServiceAddr set service address with client name
-func SetClientServiceAddr(clientName, serviceName string) {
-	SetClientServiceName(clientName, serviceName)
+func SetClientServiceAddr(clientName, ip string) {
 	if !IsExist(clientName) {
 		mut.RLock()
 		defer mut.RUnlock()
 		tmp := client.DefaultIPAddrClient
-		tmp.Init(client.WithServiceName(serviceName))
+		tmp.Init(client.WithServiceName(ip))
 		_IpAddrMp[clientName] = tmp
 	}
 }
