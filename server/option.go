@@ -97,6 +97,17 @@ func (obj *Options) getListener() net.Listener {
 	return obj.Listener
 }
 
+func (obj *Options) setListener(lis net.Listener) bool {
+	if obj.Listener == nil {
+		//起服务
+		obj.Listener = lis
+		obj.Address = lis.Addr().String()
+		return true
+	}
+
+	return false
+}
+
 // WithRegistryNaming 注册naming 服务发现
 func WithRegistryNaming(reg registry.RegNaming) Option {
 	return func(o *Options) {

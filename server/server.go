@@ -19,7 +19,9 @@ type Server interface {
 	String() string
 	GetServer() *grpc.Server
 	GetListener() net.Listener
+	SetListener(net.Listener) bool
 	SetAddress(add string)
+	GetAddress() string
 }
 
 // Option option list

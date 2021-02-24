@@ -165,6 +165,17 @@ func (s *namingResolver) GetListener() net.Listener {
 	return s.opts.getListener()
 }
 
+// SetListener 设置listener
+func (s *namingResolver) SetListener(l net.Listener) bool {
+	s.Lock()
+	defer s.Unlock()
+	return s.opts.setListener(l)
+}
+
 func (s *namingResolver) SetAddress(add string) {
 	s.opts.Address = add
+}
+
+func (s *namingResolver) GetAddress() string {
+	return s.opts.Address
 }
