@@ -24,6 +24,7 @@ type Options struct {
 
 	name        string
 	serviceName string
+	serviceIps  []string
 
 	// Other options for implementations of the interface
 	// can be stored in a context
@@ -49,6 +50,13 @@ func newOptions(options ...Option) Options {
 func WithServiceName(name string) Option {
 	return func(o *Options) {
 		o.serviceName = name
+	}
+}
+
+// WithServiceIps 设置服务ip列表
+func WithServiceIps(ips []string) Option {
+	return func(o *Options) {
+		o.serviceIps = ips
 	}
 }
 

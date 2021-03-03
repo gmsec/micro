@@ -6,6 +6,7 @@ import (
 	"github.com/gmsec/micro/registry"
 
 	"github.com/xxjwxc/public/mylog"
+	"github.com/xxjwxc/public/tools"
 
 	"google.golang.org/grpc"
 )
@@ -66,8 +67,11 @@ func (c *namingResolver) Next() (*poolConn, error) {
 	if c.opts.Registry != nil {
 		opt = append(opt, grpc.WithBalancer(grpc.RoundRobin(c.opts.Registry.RegNaming)))
 	}
-
-	cc, err := c.pool.getConn(c.opts.serviceName, opt...)
+	addr := c.opts.serviceName
+	if len(addr) == 0 && len(c.opts.serviceIps) > 0 {
+		addr = c.opts.serviceIps[tools.GetRandInt(0, len(c.opts.serviceIps))]
+	}
+	cc, err := c.pool.getConn(addr, opt...)
 	if err != nil {
 		mylog.Error(err)
 		return nil, err

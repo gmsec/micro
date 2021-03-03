@@ -80,12 +80,12 @@ func initService(name string, s *service) {
 }
 
 // SetClientServiceAddr set service address with client name
-func SetClientServiceAddr(clientName, ip string) {
+func SetClientServiceAddr(clientName string, ips ...string) {
 	if !IsExist(clientName) {
 		mut.RLock()
 		defer mut.RUnlock()
 		tmp := client.DefaultIPAddrClient
-		tmp.Init(client.WithServiceName(ip))
+		tmp.Init(client.WithServiceIps(ips))
 		_IpAddrMp[clientName] = tmp
 	}
 }
