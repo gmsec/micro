@@ -31,10 +31,10 @@ var (
 	// DefaultPoolMaxIdle maximum idle conns of a pool
 	// (50)
 	DefaultPoolMaxIdle = 50
-	// DefaultNamingClient is a default client to use out of the box
-	DefaultNamingClient Client = newNamingClient()
-	// DefaultIPAddrClient is a default client to use addr to connection
-	DefaultIPAddrClient Client = newIPAddrClient()
+	// // DefaultNamingClient is a default client to use out of the box
+	//  DefaultNamingClient Client = newNamingClient()
+	// // DefaultIPAddrClient is a default client to use addr to connection
+	// DefaultIPAddrClient Client = newIPAddrClient()
 	// DefaultRetries is the default number of times a request is tried
 	DefaultRetries = 1
 	// DefaultRequestTimeout is the default request timeout
@@ -46,6 +46,8 @@ var (
 
 	// NewClient returns a new client
 	NewClient func(...Option) Client = newNamingClient
+	// NewIPAddrClient returns a new client
+	NewIPAddrClient func(...Option) Client = newIPAddrClient
 )
 
 func newNamingClient(opts ...Option) Client {

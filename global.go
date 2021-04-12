@@ -7,11 +7,13 @@ import (
 	"github.com/xxjwxc/public/mylog"
 
 	"github.com/gmsec/micro/client"
+	"github.com/gmsec/micro/registry"
 )
 
 var mut sync.RWMutex
 var _mp map[string]Service
 var _IpAddrMp map[string]client.Client
+var _RegNaming registry.RegNaming
 
 func init() {
 	_mp = make(map[string]Service)
@@ -59,7 +61,11 @@ func SetClientServiceName(clientName, serviceName string) {
 	if !IsExist(clientName) {
 		mut.RLock()
 		defer mut.RUnlock()
-		tmp := client.DefaultNamingClient
+		var opts []client.Option
+		if _RegNaming != nil {
+			opts = append(opts, client.WithRegistryNaming(_RegNaming))
+		}
+		tmp := client.NewClient(opts...)
 		tmp.Init(client.WithServiceName(serviceName))
 		_IpAddrMp[clientName] = tmp
 	}
@@ -77,6 +83,9 @@ func initService(name string, s *service) {
 	mut.Lock()
 	defer mut.Unlock()
 	_mp[name] = s
+	if _RegNaming == nil {
+		_RegNaming = s.Options().Registry.RegNaming
+	}
 }
 
 // SetClientServiceAddr set service address with client name
@@ -84,7 +93,7 @@ func SetClientServiceAddr(clientName string, ips ...string) {
 	if !IsExist(clientName) {
 		mut.RLock()
 		defer mut.RUnlock()
-		tmp := client.DefaultIPAddrClient
+		tmp := client.NewIPAddrClient()
 		tmp.Init(client.WithServiceIps(ips))
 		_IpAddrMp[clientName] = tmp
 	}

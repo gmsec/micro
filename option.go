@@ -35,8 +35,8 @@ type Options struct {
 func newOptions(opts ...Option) Options {
 	// reg := registry.NewDNSNamingRegistry()
 	opt := Options{
-		Client: client.DefaultNamingClient,
-		Server: server.DefaultNamingServer,
+		Client: client.NewClient(),
+		Server: server.NewServer(),
 		// Registry: &registry.Registry{
 		// 	RegNaming: reg,
 		// },
@@ -77,8 +77,8 @@ func WithRegisterInterval(t time.Duration) Option {
 // WithRegistryNaming Register for naming service discovery
 func WithRegistryNaming(reg registry.RegNaming) Option {
 	return func(o *Options) {
-		o.Server = server.DefaultNamingServer
-		o.Client = client.DefaultNamingClient
+		// o.Server = server.NewServer()
+		// o.Client = client.NewClient()
 		o.Registry = &registry.Registry{
 			RegNaming: reg,
 		}
