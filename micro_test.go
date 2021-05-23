@@ -10,7 +10,6 @@ import (
 )
 
 func TestMain(t *testing.T) {
-	reg := registry.NewDNSNamingRegistry()
 
 	os.Setenv("MICRO_DEBUG_PROFILE", "true")
 	// 初始化服务
@@ -19,6 +18,8 @@ func TestMain(t *testing.T) {
 		WithRegisterTTL(time.Second*30),      //指定服务注册时间
 		WithRegisterInterval(time.Second*15), //让服务在指定时间内重新注册
 	)
+
+	reg := registry.NewDNSNamingRegistry()
 	service.Init(WithRegistryNaming(reg))
 
 	// server
@@ -44,5 +45,5 @@ func TestMain(t *testing.T) {
 
 	// process, _ := os.FindProcess(os.Getpid())
 	// process.Signal(syscall.SIGTERM)
-	// time.Sleep(1 * time.Second)
+	time.Sleep(10 * time.Second)
 }

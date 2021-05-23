@@ -4,8 +4,6 @@ import (
 	"net"
 	"time"
 
-	"github.com/gmsec/micro/registry"
-
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
 )
@@ -50,11 +48,11 @@ var (
 func newNamingServer(opts ...Option) Server {
 	options := newOptions(opts...)
 
-	if options.Registry == nil {
-		options.Registry = &registry.Registry{
-			RegNaming: registry.NewDNSNamingRegistry(),
-		}
-	}
+	// if options.Registry == nil {
+	// 	options.Registry = &registry.Registry{
+	// 		RegNaming: registry.NewDNSNamingRegistry(),
+	// 	}
+	// }
 
 	return &namingResolver{
 		opts: options,

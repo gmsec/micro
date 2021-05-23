@@ -9,9 +9,8 @@ import (
 )
 
 type pool struct {
-	isIPAddr bool // if IP direct connection
-	size     int
-	ttl      int64
+	size int
+	ttl  int64
 
 	//  max streams on a *poolConn
 	maxStreams int
@@ -64,7 +63,6 @@ func newPool(size int, ttl time.Duration, idle int, ms int, isIPAddr bool) *pool
 		maxStreams: ms,
 		maxIdle:    idle,
 		conns:      make(map[string]*streamsPool),
-		isIPAddr:   isIPAddr,
 	}
 }
 
@@ -76,8 +74,6 @@ func (p *pool) getConn(addr string, opts ...grpc.DialOption) (*poolConn, error) 
 		sp = &streamsPool{head: &poolConn{}, busy: &poolConn{}, count: 0, idle: 0}
 		p.conns[addr] = sp
 	}
-
-	// fmt.Println("=======pool_len:", sp.count)
 	//  while we have conns check streams and then return one
 	//  otherwise we'll create a new conn
 	conn := sp.head.next
@@ -88,21 +84,19 @@ func (p *pool) getConn(addr string, opts ...grpc.DialOption) (*poolConn, error) 
 		case connectivity.Connecting:
 			conn = conn.next
 			continue
-		// case connectivity.Shutdown:
-		// 	next := conn.next
-		// 	if conn.streams == 0 {
-		// 		removeConn(conn)
-		// 		sp.idle--
-		// 	}
-		// 	conn = next
-		// 	continue
-		case connectivity.TransientFailure, connectivity.Shutdown:
+		case connectivity.Shutdown:
 			next := conn.next
 			if conn.streams == 0 {
 				removeConn(conn)
-				if conn.GetState() == connectivity.TransientFailure {
-					conn.ClientConn.Close()
-				}
+				sp.idle--
+			}
+			conn = next
+			continue
+		case connectivity.TransientFailure:
+			next := conn.next
+			if conn.streams == 0 {
+				removeConn(conn)
+				conn.ClientConn.Close()
 				sp.idle--
 			}
 			conn = next
@@ -110,7 +104,6 @@ func (p *pool) getConn(addr string, opts ...grpc.DialOption) (*poolConn, error) 
 		case connectivity.Ready:
 		case connectivity.Idle:
 		}
-
 		//  a old conn
 		if now-conn.created > p.ttl {
 			next := conn.next

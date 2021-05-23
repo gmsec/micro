@@ -47,6 +47,13 @@ func newOptions(opts ...Option) Options {
 		o(&opt)
 	}
 
+	if opt.Registry == nil {
+		opt.Registry = &registry.Registry{
+			RegNaming: registry.NewDNSNamingRegistry(),
+		}
+		opt.Client.Init(client.WithRegistryNaming(opt.Registry.RegNaming))
+		opt.Server.Init(server.WithRegistryNaming(opt.Registry.RegNaming))
+	}
 	return opt
 }
 

@@ -30,10 +30,6 @@ type DNSNamingRegister struct {
 	sync.Mutex
 	node *mdns.Server
 
-	// watch mabey
-	cancel context.CancelFunc
-	ctx    context.Context
-	isInit bool
 	// listener
 	// listener chan *mdns.ServiceEntry
 }
@@ -66,6 +62,15 @@ func newDNSNamingRegistry(opts ...Option) RegNaming {
 		opts:   options,
 		domain: domain,
 	}
+}
+
+// Init init option
+func (r *DNSNamingRegister) Init(opts ...Option) error {
+	for _, o := range opts {
+		o(&r.opts)
+	}
+
+	return nil
 }
 
 func (r *DNSNamingRegister) String() string {
@@ -132,65 +137,68 @@ func (r *DNSNamingRegister) Deregister() error {
 func (r *DNSNamingRegister) Resolve(target string) (naming.Watcher, error) {
 	r.Lock()
 	defer r.Unlock()
-	r.ctx, r.cancel = context.WithCancel(context.Background())
-	// w := &dnsNamingWatcher{
-	// 	node:        dnr.node,
-	// 	timeout:     dnr.opts.Timeout,
-	// 	serviceName: dnr.opts.serviceName,
-	// 	domain:      dnr.domain,
-	// 	ctx:         ctx,
-	// 	cancel:      cancel,
-	// }
-	return r, nil
+	ctx, cancel := context.WithCancel(context.Background())
+	w := &dnsNamingWatcher{
+		node:        r.node,
+		timeout:     r.opts.Timeout,
+		serviceName: target,
+		domain:      r.domain,
+		ctx:         ctx,
+		cancel:      cancel,
+	}
+	return w, nil
 }
 
-// type dnsNamingWatcher struct {
-// 	node    *mdns.Server
-// 	timeout time.Duration
+type dnsNamingWatcher struct {
+	sync.Mutex
+	node    *mdns.Server
+	timeout time.Duration
 
-// 	serviceName string
-// 	domain      string
+	serviceName string
+	domain      string
 
-// 	ctx context.Context
-
-// 	// c      *etcd.Client
-// 	// target string
-// 	// wch    etcd.WatchChan
-// 	// err    error
-// }
+	// watch mabey
+	cancel context.CancelFunc
+	ctx    context.Context
+	isInit bool
+	// c      *etcd.Client
+	// target string
+	// wch    etcd.WatchChan
+	// err    error
+}
 
 // Next gets the next set of updates from the etcd resolver.
 // Calls to Next should be serialized; concurrent calls are not safe since
 // there is no way to reconcile the update ordering.
-func (r *DNSNamingRegister) Next() ([]*naming.Update, error) {
+func (r *dnsNamingWatcher) Next() ([]*naming.Update, error) {
 	r.Lock()
 	defer r.Unlock()
 
 	if !r.isInit { // first
 		r.isInit = true
-		timeout := r.opts.Timeout
+		timeout := r.timeout
 		defer func() {
 			if timeout > time.Second*3 {
 				timeout = time.Second * 3
 			}
-			r.opts.Timeout = timeout
+			r.timeout = timeout
 		}()
-		r.opts.Timeout = time.Millisecond * 100
+		r.timeout = time.Millisecond * 100
 		return r.getService()
 	}
 
 	return r.getService()
 }
 
-func (r *DNSNamingRegister) getService() ([]*naming.Update, error) {
+func (r *dnsNamingWatcher) getService() ([]*naming.Update, error) {
 	var serviceList []*naming.Update
 	entries := make(chan *mdns.ServiceEntry, 10)
 	done := make(chan bool)
 
-	p := mdns.DefaultParams(r.opts.ServiceName)
+	p := mdns.DefaultParams(r.serviceName)
 	// set context with timeout
 	var cancel context.CancelFunc
-	p.Context, cancel = context.WithTimeout(context.Background(), r.opts.Timeout)
+	p.Context, cancel = context.WithTimeout(context.Background(), r.timeout)
 	defer cancel()
 	// set entries channel
 	p.Entries = entries
@@ -242,16 +250,7 @@ func (r *DNSNamingRegister) getService() ([]*naming.Update, error) {
 }
 
 // Close close watcher
-func (r *DNSNamingRegister) Close() { r.cancel() }
-
-// Init init option
-func (r *DNSNamingRegister) Init(opts ...Option) error {
-	for _, o := range opts {
-		o(&r.opts)
-	}
-
-	return nil
-}
+func (r *dnsNamingWatcher) Close() { r.cancel() }
 
 // Options get opts list
 func (r *DNSNamingRegister) Options() Options {

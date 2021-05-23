@@ -2,8 +2,6 @@ package client
 
 import (
 	"time"
-
-	"github.com/gmsec/micro/registry"
 )
 
 // Client is the interface used to make requests to services.
@@ -53,11 +51,11 @@ var (
 func newNamingClient(opts ...Option) Client {
 	options := newOptions(opts...)
 
-	if options.Registry == nil {
-		options.Registry = &registry.Registry{
-			RegNaming: registry.NewDNSNamingRegistry(),
-		}
-	}
+	// if options.Registry == nil {
+	// 	options.Registry = &registry.Registry{
+	// 		RegNaming: registry.NewDNSNamingRegistry(),
+	// 	}
+	// }
 
 	rc := &namingResolver{
 		opts: options,

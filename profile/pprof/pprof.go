@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/gmsec/micro/profile"
+	"github.com/xxjwxc/public/tools"
 )
 
 type profiler struct {
@@ -50,15 +51,20 @@ func (p *profiler) Start() error {
 		return nil
 	}
 
+	tmp := "/tmp"
+	if runtime.GOOS == "windows" { // windows系统
+		tmp = filepath.Join(tools.GetCurrentDirectory(), "/tmp")
+		tools.BuildDir(tmp + "/")
+	}
 	// create exit channel
 	p.exit = make(chan bool)
 
-	cpuFile := filepath.Join("/tmp", "cpu.pprof")
-	memFile := filepath.Join("/tmp", "mem.pprof")
+	cpuFile := filepath.Join(tmp, "cpu.pprof")
+	memFile := filepath.Join(tmp, "mem.pprof")
 
 	if len(p.opts.Name) > 0 {
-		cpuFile = filepath.Join("/tmp", p.opts.Name+".cpu.pprof")
-		memFile = filepath.Join("/tmp", p.opts.Name+".mem.pprof")
+		cpuFile = filepath.Join(tmp, p.opts.Name+".cpu.pprof")
+		memFile = filepath.Join(tmp, p.opts.Name+".mem.pprof")
 	}
 
 	f1, err := os.Create(cpuFile)
