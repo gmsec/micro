@@ -45,5 +45,5 @@ func TestMain(t *testing.T) {
 
 	// process, _ := os.FindProcess(os.Getpid())
 	// process.Signal(syscall.SIGTERM)
-	time.Sleep(10 * time.Second)
+	time.Sleep(1 * time.Second)
 }

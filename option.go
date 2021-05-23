@@ -47,7 +47,7 @@ func newOptions(opts ...Option) Options {
 		o(&opt)
 	}
 
-	if opt.Registry == nil {
+	if opt.Registry == nil { // 默认注册 服务发现
 		opt.Registry = &registry.Registry{
 			RegNaming: registry.NewDNSNamingRegistry(),
 		}
