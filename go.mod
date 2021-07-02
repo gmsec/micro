@@ -3,6 +3,7 @@ module github.com/gmsec/micro
 go 1.14
 
 require (
+	github.com/golang/protobuf v1.4.2
 	github.com/google/uuid v1.1.2
 	github.com/gookit/color v1.3.8 // indirect
 	github.com/micro/mdns v0.3.0

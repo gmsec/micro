@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
+	pb "github.com/gmsec/micro/client/helloworld"
 	"google.golang.org/grpc"
 	pgrpc "google.golang.org/grpc"
-	pb "google.golang.org/grpc/examples/helloworld/helloworld"
 )
 
 // server is used to implement helloworld.GreeterServer.
