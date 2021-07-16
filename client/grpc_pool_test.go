@@ -38,7 +38,7 @@ func testPool(t *testing.T, size int, ttl time.Duration, idle int, ms int) {
 	defer s.Stop()
 
 	// zero pool
-	p := newPool(size, ttl, idle, ms, false)
+	p := newPool(size, ttl, idle, ms, false, 3*time.Second)
 
 	for i := 0; i < 10; i++ {
 		// get a conn

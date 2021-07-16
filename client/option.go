@@ -12,6 +12,7 @@ type Options struct {
 	// Connection Pool
 	PoolSize int
 	PoolTTL  time.Duration
+	TimeOut  time.Duration
 
 	Registry *registry.Registry
 	// registry
@@ -37,6 +38,7 @@ func newOptions(options ...Option) Options {
 		PoolSize:    DefaultPoolSize,
 		PoolTTL:     DefaultPoolTTL,
 		RegisterTTL: time.Millisecond * 100,
+		TimeOut:     DefaultPoolTimeout,
 	}
 
 	for _, o := range options {

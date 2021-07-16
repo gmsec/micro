@@ -42,6 +42,9 @@ var (
 	// DefaultPoolTTL sets the connection pool ttl
 	DefaultPoolTTL = time.Minute
 
+	// DefaultPoolTimeout sets the connection pool ttl
+	DefaultPoolTimeout = 5 * time.Second
+
 	// NewClient returns a new client
 	NewClient func(...Option) Client = newNamingClient
 	// NewIPAddrClient returns a new client
@@ -67,7 +70,7 @@ func newNamingClient(opts ...Option) Client {
 		// wg:          wait(options.Context),
 	}
 	// rc.once.Store(false)
-	rc.pool = newPool(options.PoolSize, options.PoolTTL, rc.poolMaxIdle(), rc.poolMaxStreams(), false)
+	rc.pool = newPool(options.PoolSize, options.PoolTTL, rc.poolMaxIdle(), rc.poolMaxStreams(), false, options.TimeOut)
 
 	return rc
 }
@@ -84,7 +87,7 @@ func newIPAddrClient(opts ...Option) Client {
 		// wg:          wait(options.Context),
 	}
 	// rc.once.Store(false)
-	rc.pool = newPool(options.PoolSize, options.PoolTTL, rc.poolMaxIdle(), rc.poolMaxStreams(), true)
+	rc.pool = newPool(options.PoolSize, options.PoolTTL, rc.poolMaxIdle(), rc.poolMaxStreams(), true, options.TimeOut)
 
 	return rc
 }

@@ -1,6 +1,8 @@
 package client
 
 import (
+	"context"
+	"fmt"
 	"sync"
 	"time"
 
@@ -9,8 +11,9 @@ import (
 )
 
 type pool struct {
-	size int
-	ttl  int64
+	timeOut time.Duration
+	size    int
+	ttl     int64
 
 	//  max streams on a *poolConn
 	maxStreams int
@@ -50,7 +53,7 @@ type poolConn struct {
 	in   bool
 }
 
-func newPool(size int, ttl time.Duration, idle int, ms int, isIPAddr bool) *pool {
+func newPool(size int, ttl time.Duration, idle int, ms int, isIPAddr bool, timeOut time.Duration) *pool {
 	if ms <= 0 {
 		ms = 1
 	}
@@ -60,6 +63,7 @@ func newPool(size int, ttl time.Duration, idle int, ms int, isIPAddr bool) *pool
 	return &pool{
 		size:       size,
 		ttl:        int64(ttl.Seconds()),
+		timeOut:    timeOut,
 		maxStreams: ms,
 		maxIdle:    idle,
 		conns:      make(map[string]*streamsPool),
@@ -135,9 +139,12 @@ func (p *pool) getConn(addr string, opts ...grpc.DialOption) (*poolConn, error) 
 	p.Unlock()
 
 	//  create new conn
-	cc, err := grpc.Dial(addr, opts...)
+	ctx, cel := context.WithTimeout(context.Background(), p.timeOut)
+	defer cel()
+	cc, err := grpc.DialContext(ctx, addr, opts...)
 	if err != nil {
-		return nil, err
+		//if err == context.DeadlineExceeded { // 超时
+		return nil, fmt.Errorf("[%v]:%v", addr, err.Error())
 	}
 	conn = &poolConn{cc, nil, addr, p, sp, 1, time.Now().Unix(), nil, nil, false}
 
