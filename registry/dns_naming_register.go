@@ -41,10 +41,11 @@ func NewDNSNamingRegistry(opts ...Option) RegNaming {
 
 func newDNSNamingRegistry(opts ...Option) RegNaming {
 	options := Options{
-		Context:     context.Background(),
-		Timeout:     time.Millisecond * 100,
-		NodeID:      uuid.New().String(),
-		ServiceName: "gmsec.service",
+		Context:          context.Background(),
+		Timeout:          time.Millisecond * 100,
+		KeepHeartTimeout: time.Second * 15,
+		NodeID:           uuid.New().String(),
+		ServiceName:      "gmsec.service",
 	}
 	for _, o := range opts {
 		o(&options)

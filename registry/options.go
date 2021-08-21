@@ -7,8 +7,9 @@ import (
 
 // Options opts define
 type Options struct {
-	Addrs   []string
-	Timeout time.Duration
+	Addrs            []string
+	Timeout          time.Duration
+	KeepHeartTimeout time.Duration
 	// Secure      bool
 	// TLSConfig   *tls.Config
 	NodeID      string
@@ -48,6 +49,13 @@ func WithAddrs(addrs ...string) Option {
 func WithTimeout(t time.Duration) Option {
 	return func(o *Options) {
 		o.Timeout = t
+	}
+}
+
+// WithKeepHeartTimeout set heart timeout
+func WithKeepHeartTimeout(t time.Duration) Option {
+	return func(o *Options) {
+		o.KeepHeartTimeout = t
 	}
 }
 
