@@ -7,7 +7,7 @@ require (
 	github.com/google/uuid v1.1.2
 	github.com/gookit/color v1.3.8 // indirect
 	github.com/micro/mdns v0.3.0
-	github.com/xxjwxc/public v0.0.0-20210518123934-6cc0965f0bc5
+	github.com/xxjwxc/public v0.0.0-20210812080902-893e9ff8ba5f
 	go.uber.org/multierr v1.6.0 // indirect
 	go.uber.org/zap v1.16.0 // indirect
 	golang.org/x/text v0.3.5 // indirect
