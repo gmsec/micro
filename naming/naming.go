@@ -10,8 +10,6 @@ type Operation uint8
 
 // Update defines a name resolution update. Notice that it is not valid having both
 // empty string Addr and nil Metadata in an Update.
-//
-// Deprecated: please use package resolver.
 type Update struct {
 	// Op indicates the operation of the update.
 	Op Operation
@@ -30,8 +28,6 @@ const (
 )
 
 // Watcher watches for the updates on the specified target.
-//
-// Deprecated: please use package resolver.
 type Watcher interface {
 	// Next blocks until an update or error happens. It may return one or more
 	// updates. The first call should get the full set of the results. It should
