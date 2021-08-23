@@ -20,6 +20,7 @@ type Options struct {
 	RegisterTTL time.Duration
 	// The interval on which to register
 	RegisterInterval time.Duration
+	Scheme           string // client gmsec (注册名)
 
 	// Client *grpc.ClientConn
 
@@ -39,6 +40,7 @@ func newOptions(options ...Option) Options {
 		PoolTTL:     DefaultPoolTTL,
 		RegisterTTL: time.Millisecond * 100,
 		TimeOut:     DefaultPoolTimeout,
+		Scheme:      "gmsec",
 	}
 
 	for _, o := range options {
@@ -66,6 +68,13 @@ func WithServiceIps(ips []string) Option {
 func WithName(name string) Option {
 	return func(o *Options) {
 		o.name = name
+	}
+}
+
+// WithScheme 设置客户端服务名
+func WithScheme(name string) Option {
+	return func(o *Options) {
+		o.Scheme = name
 	}
 }
 

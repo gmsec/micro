@@ -19,7 +19,7 @@ import (
 // 	DefaultnamingResolver registry.RegistryNaming =
 // )
 /*
-	google.golang.org/grpc/naming
+	github.com/gmsec/micro/naming
 	grpc 默认支持项,多语言同时接入时推荐使用
 */
 

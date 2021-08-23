@@ -9,12 +9,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gmsec/micro/naming"
 	"github.com/xxjwxc/public/mylog"
 
 	"github.com/google/uuid"
 	"github.com/micro/mdns"
 	"github.com/xxjwxc/public/tools"
-	"google.golang.org/grpc/naming"
 )
 
 var (

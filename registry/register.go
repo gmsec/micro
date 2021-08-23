@@ -1,8 +1,6 @@
 package registry
 
-import (
-	"google.golang.org/grpc/naming"
-)
+import "github.com/gmsec/micro/naming"
 
 // RegNaming grpc自带服务发现
 type RegNaming interface {

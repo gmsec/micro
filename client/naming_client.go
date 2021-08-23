@@ -1,6 +1,7 @@
 package client
 
 import (
+	"fmt"
 	"sync"
 
 	"github.com/gmsec/micro/registry"
@@ -9,12 +10,14 @@ import (
 	"github.com/xxjwxc/public/tools"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/resolver"
 )
 
 type namingResolver struct {
 	opts Options
 	sync.RWMutex
 	pool *pool
+	once sync.Once
 	// marks the serve as started
 }
 
@@ -57,20 +60,30 @@ func (c *namingResolver) String() string {
 	return c.opts.name
 }
 
+// initResolver 注册平衡器
+func (c *namingResolver) initResolver() {
+	resolver.Register(&resolverBuilder{scheme: c.opts.Scheme, regNaming: c.opts.Registry.RegNaming})
+}
+
 // Next connon
 func (c *namingResolver) Next() (*poolConn, error) {
+	c.once.Do(c.initResolver)
+
 	opt := []grpc.DialOption{
 		grpc.WithInsecure(),
 		grpc.WithBlock(),
 	}
 	// 开始注册
 	if c.opts.Registry != nil {
-		opt = append(opt, grpc.WithBalancer(grpc.RoundRobin(c.opts.Registry.RegNaming)))
+		opt = append(opt, grpc.WithDefaultServiceConfig(`{"loadBalancingPolicy":"round_robin"}`)) //grpc.WithBalancer(grpc.RoundRobin(c.opts.Registry.RegNaming))
 	}
-	addr := c.opts.serviceName
-	if len(addr) == 0 && len(c.opts.serviceIps) > 0 {
-		addr = c.opts.serviceIps[tools.GetRandInt(0, len(c.opts.serviceIps))]
+	var addr string
+	if len(c.opts.serviceName) > 0 {
+		addr = fmt.Sprintf("%v:///%v", c.opts.Scheme, c.opts.serviceName)
+	} else if len(c.opts.serviceIps) > 0 {
+		addr = c.opts.serviceIps[tools.GetRandInt(0, len(c.opts.serviceIps))] // 随机
 	}
+
 	cc, err := c.pool.getConn(addr, opt...)
 	if err != nil {
 		mylog.Error(err)
