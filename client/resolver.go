@@ -54,14 +54,14 @@ func (r *myResolver) start() {
 				break
 			}
 
-			var addrs []resolver.Address
+			isUpdate := false
 			for _, update := range updates {
 				switch update.Op {
 				case naming.Add: // 添加
 					{
 						if _, ok := r.addrsStore[update.Addr]; !ok { // 有新加才添加
 							r.addrsStore[update.Addr] = update
-							addrs = append(addrs, resolver.Address{Addr: update.Addr})
+							isUpdate = true
 						}
 					}
 				case naming.Delete: // 删除
@@ -73,7 +73,11 @@ func (r *myResolver) start() {
 				mylog.Debugf("watcher(%v):%v", r.target.Endpoint, tools.JSONDecode(update))
 			}
 
-			if len(addrs) > 0 {
+			if isUpdate {
+				var addrs []resolver.Address
+				for _, v := range r.addrsStore {
+					addrs = append(addrs, resolver.Address{Addr: v.Addr})
+				}
 				r.cc.UpdateState(resolver.State{Addresses: addrs})
 			}
 
