@@ -1,8 +1,6 @@
 package client
 
 import (
-	"sync"
-
 	"github.com/gmsec/micro/naming"
 	"github.com/gmsec/micro/registry"
 	"github.com/xxjwxc/public/mylog"
@@ -39,12 +37,10 @@ type myResolver struct {
 	cc         resolver.ClientConn
 	watcher    naming.Watcher
 	addrsStore map[string]*naming.Update
-	wg         sync.WaitGroup
 	isClose    bool
 }
 
 func (r *myResolver) start() {
-	r.wg.Add(1)
 	go func() {
 		for {
 			updates, err := r.watcher.Next()
@@ -85,7 +81,6 @@ func (r *myResolver) start() {
 				break
 			}
 		}
-		r.wg.Done()
 	}()
 
 }
@@ -96,6 +91,5 @@ func (*myResolver) ResolveNow(o resolver.ResolveNowOptions) {
 
 func (r *myResolver) Close() {
 	r.isClose = true
-	r.wg.Wait()
 	mylog.Debugf("Close:%v", r.target.Endpoint)
 }
