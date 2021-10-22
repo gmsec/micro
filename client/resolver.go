@@ -78,6 +78,7 @@ func (r *myResolver) start() {
 			}
 
 			if r.isClose {
+				r.watcher.Close()
 				break
 			}
 		}
