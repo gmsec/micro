@@ -7,9 +7,11 @@ import (
 	"time"
 
 	"github.com/gmsec/micro/registry"
+	"github.com/gmsec/micro/tracer"
 
 	"github.com/xxjwxc/public/mylog"
 
+	grpc_opentracing "github.com/grpc-ecosystem/go-grpc-middleware/tracing/opentracing"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/health"
 	"google.golang.org/grpc/health/grpc_health_v1"
@@ -127,6 +129,7 @@ func (s *namingResolver) Stop() error {
 	gs := s.GetServer()
 	reg := s.opts.Registry.RegNaming
 	reg.Deregister()
+	tracer.CloseTracer() // 关闭链路追踪
 
 	// paus one second
 	select {
@@ -152,7 +155,13 @@ func (s *namingResolver) GetServer() *grpc.Server {
 	defer s.Unlock()
 
 	if s.opts.Server == nil {
-		s.opts.Server = grpc.NewServer()
+		trace := tracer.GetTracer()
+		if trace != nil {
+			s.opts.Server = grpc.NewServer(grpc.UnaryInterceptor(
+				grpc_opentracing.UnaryServerInterceptor(grpc_opentracing.WithTracer(trace))))
+		} else {
+			s.opts.Server = grpc.NewServer()
+		}
 	}
 
 	return s.opts.Server

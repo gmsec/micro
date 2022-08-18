@@ -7,6 +7,7 @@ import (
 	"github.com/gmsec/micro/client"
 	"github.com/gmsec/micro/registry"
 	"github.com/gmsec/micro/server"
+	"github.com/gmsec/micro/tracer"
 )
 
 // Options ...
@@ -59,6 +60,7 @@ func newOptions(opts ...Option) Options {
 
 // WithName of the service . Specify service name (Group)
 func WithName(n string) Option {
+	tracer.SetServiceName(n)
 	return func(o *Options) {
 		o.Server.Init(server.Name(n))
 		o.Client.Init(client.WithServiceName(n))

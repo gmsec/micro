@@ -5,10 +5,12 @@ import (
 	"sync"
 
 	"github.com/gmsec/micro/registry"
+	"github.com/gmsec/micro/tracer"
 
 	"github.com/xxjwxc/public/mylog"
 	"github.com/xxjwxc/public/tools"
 
+	grpc_opentracing "github.com/grpc-ecosystem/go-grpc-middleware/tracing/opentracing"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/resolver"
 )
@@ -76,6 +78,12 @@ func (c *namingResolver) Next() (*poolConn, error) {
 	// 开始注册
 	if c.opts.Registry != nil {
 		opt = append(opt, grpc.WithDefaultServiceConfig(`{"loadBalancingPolicy":"round_robin"}`)) //grpc.WithBalancer(grpc.RoundRobin(c.opts.Registry.RegNaming))
+	}
+	trace := tracer.GetTracer()
+	if trace != nil {
+		opt = append(opt, grpc.WithUnaryInterceptor(grpc_opentracing.UnaryClientInterceptor(
+			grpc_opentracing.WithTracer(trace),
+		)))
 	}
 	var addr string
 	if len(c.opts.serviceName) > 0 {
