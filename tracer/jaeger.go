@@ -1,6 +1,7 @@
 package tracer
 
 import (
+	"fmt"
 	"io"
 	"time"
 
@@ -13,6 +14,8 @@ import (
 type jaegerInfo struct {
 	addr        string
 	serviceName string
+	percent     float64
+	head        string
 
 	tracer opentracing.Tracer
 	closer io.Closer
@@ -20,10 +23,13 @@ type jaegerInfo struct {
 
 var _jaegerInfo *jaegerInfo
 
-func WithTracer(addr string) {
+// WithTracer addr:地址，percent 概率采集
+func WithTracer(head, addr string, percent int) {
 	if _jaegerInfo == nil {
 		_jaegerInfo = &jaegerInfo{
-			addr: addr,
+			addr:    addr,
+			head:    head,
+			percent: float64(percent) * 0.01,
 		}
 	}
 	_jaegerInfo.addr = addr
@@ -41,13 +47,17 @@ func SetServiceName(service string) {
 }
 
 func initTrace() {
-	if len(_jaegerInfo.addr) > 0 && len(_jaegerInfo.serviceName) > 0 {
+	serviceName := _jaegerInfo.serviceName
+	if len(_jaegerInfo.head) > 0 {
+		serviceName = fmt.Sprintf("%v_%v", _jaegerInfo.head, _jaegerInfo.serviceName)
+	}
+	if len(_jaegerInfo.addr) > 0 && len(serviceName) > 0 {
 		jcfg := jaegercfg.Configuration{
 			Sampler: &jaegercfg.SamplerConfig{
-				Type:  "const",
-				Param: 1,
+				Type:  "probabilistic",
+				Param: _jaegerInfo.percent,
 			},
-			ServiceName: _jaegerInfo.serviceName,
+			ServiceName: serviceName,
 		}
 
 		report := &jaegercfg.ReporterConfig{
