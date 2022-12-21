@@ -12,8 +12,8 @@ import (
 	"github.com/gmsec/micro/naming"
 	"github.com/xxjwxc/public/mylog"
 
+	"github.com/gmsec/micro/mdns"
 	"github.com/google/uuid"
-	"github.com/micro/mdns"
 	"github.com/xxjwxc/public/tools"
 )
 
@@ -78,7 +78,7 @@ func (r *DNSNamingRegister) String() string {
 	return r.opts.ServiceName
 }
 
-//Register register & add new node
+// Register register & add new node
 func (r *DNSNamingRegister) Register(address string, Metadata interface{}) error {
 	r.Lock()
 	defer r.Unlock()
