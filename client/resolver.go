@@ -15,7 +15,7 @@ type resolverBuilder struct {
 }
 
 func (rb *resolverBuilder) Build(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOptions) (resolver.Resolver, error) {
-	watcher, err := rb.regNaming.Resolve(target.Endpoint)
+	watcher, err := rb.regNaming.Resolve(target.Endpoint())
 	if err != nil {
 		return nil, err
 	}
