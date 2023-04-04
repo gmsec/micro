@@ -33,7 +33,7 @@ func WithTracer(head, addr string, percent int) {
 		}
 	}
 	_jaegerInfo.addr = addr
-	initTrace()
+	// initTrace()
 }
 
 func SetServiceName(service string) {
