@@ -1,13 +1,17 @@
 package tracer
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"time"
 
 	"github.com/opentracing/opentracing-go"
+	"github.com/opentracing/opentracing-go/ext"
+	"github.com/opentracing/opentracing-go/log"
 	"github.com/uber/jaeger-client-go"
 	jaegercfg "github.com/uber/jaeger-client-go/config"
+	"github.com/xxjwxc/public/message"
 	"github.com/xxjwxc/public/mylog"
 )
 
@@ -96,53 +100,57 @@ func CloseTracer() {
 	}
 }
 
-/**** 在业务代码中使用
-
-有时候只监控一个"api"是不够的，还需要监控到程序中的代码片段(如方法)，可以这样封装一个方法
-
-
-package tracer
-
 type SpanOption func(span opentracing.Span)
 
 func SpanWithError(err error) SpanOption {
-    return func(span opentracing.Span) {
-        if err != nil {
-            ext.Error.Set(span, true)
-            span.LogFields(tlog.String("event", "error"), tlog.String("msg", err.Error()))
-        }
-    }
+	return func(span opentracing.Span) {
+		if err != nil {
+			ext.Error.Set(span, true)
+			span.LogFields(log.String("event", "error"), log.String("msg", err.Error()))
+		}
+	}
 }
 
 // example:
 // SpanWithLog(
-//    "event", "soft error",
-//    "type", "cache timeout",
-//    "waited.millis", 1500)
+//
+//	"event", "soft error",
+//	"type", "cache timeout",
+//	"waited.millis", 1500)
 func SpanWithLog(arg ...interface{}) SpanOption {
-    return func(span opentracing.Span) {
-        span.LogKV(arg...)
-    }
+	return func(span opentracing.Span) {
+		span.LogKV(arg...)
+	}
 }
 
-func Start(tracer opentracing.Tracer, spanName string, ctx context.Context) (newCtx context.Context, finish func(...SpanOption)) {
-    if ctx == nil {
-        ctx = context.TODO()
-    }
-    span, newCtx := opentracing.StartSpanFromContextWithTracer(ctx, tracer, spanName,
-        opentracing.Tag{Key: string(ext.Component), Value: "func"},
-    )
+func Start(spanName string, ctx context.Context) (newCtx context.Context, finish func(...SpanOption), err error) {
+	if ctx == nil {
+		ctx = context.TODO()
+	}
 
-    finish = func(ops ...SpanOption) {
-        for _, o := range ops {
-            o(span)
-        }
-        span.Finish()
-    }
+	_trace := GetTracer()
+	if _trace == nil {
+		err = message.GetError(message.InvalidArgument)
+		return
+	}
 
-    return
+	span, newCtx := opentracing.StartSpanFromContextWithTracer(ctx, _trace, spanName,
+		opentracing.Tag{Key: string(ext.Component), Value: "func"},
+	)
+
+	finish = func(ops ...SpanOption) {
+		for _, o := range ops {
+			o(span)
+		}
+		span.Finish()
+	}
+
+	return
 }
 
+/**** 在业务代码中使用
+
+有时候只监控一个"api"是不够的，还需要监控到程序中的代码片段(如方法)，可以这样封装一个方法
 使用
 
 newCtx, finish := tracer.Start("DoSomeThing", ctx)
