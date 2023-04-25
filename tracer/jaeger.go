@@ -16,24 +16,28 @@ import (
 )
 
 type jaegerInfo struct {
-	addr        string
-	serviceName string
-	percent     float64
-	head        string
-
-	tracer opentracing.Tracer
-	closer io.Closer
+	addr              string
+	serviceName       string
+	percent           float64
+	head              string
+	maxTagValueLength int
+	tracer            opentracing.Tracer
+	closer            io.Closer
 }
 
 var _jaegerInfo *jaegerInfo
 
 // WithTracer addr:地址，percent 概率采集
-func WithTracer(head, addr string, percent int) {
+func WithTracer(head, addr string, percent int, maxTagValueLength int) {
+	if maxTagValueLength <= 0 {
+		maxTagValueLength = jaeger.DefaultMaxTagValueLength
+	}
 	if _jaegerInfo == nil {
 		_jaegerInfo = &jaegerInfo{
-			addr:    addr,
-			head:    head,
-			percent: float64(percent) * 0.01,
+			addr:              addr,
+			head:              head,
+			percent:           float64(percent) * 0.01,
+			maxTagValueLength: maxTagValueLength,
 		}
 	}
 	_jaegerInfo.addr = addr
@@ -74,6 +78,7 @@ func initTrace() {
 		reporter, _ := report.NewReporter(_jaegerInfo.serviceName, jaeger.NewNullMetrics(), jaeger.StdLogger)
 		_jaegerInfo.tracer, _jaegerInfo.closer, err = jcfg.NewTracer(
 			jaegercfg.Reporter(reporter),
+			jaegercfg.MaxTagValueLength(_jaegerInfo.maxTagValueLength),
 		)
 
 		if err != nil {
