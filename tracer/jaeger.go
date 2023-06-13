@@ -130,7 +130,7 @@ func SpanWithLog(arg ...interface{}) SpanOption {
 
 func Start(spanName string, ctx context.Context) (newCtx context.Context, finish func(...SpanOption), err error) {
 	if ctx == nil {
-		ctx = context.TODO()
+		ctx, _ = context.WithTimeout(context.Background(), 3*time.Second)
 	}
 
 	_trace := GetTracer()
