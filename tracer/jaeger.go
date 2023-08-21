@@ -11,6 +11,7 @@ import (
 	"github.com/opentracing/opentracing-go/log"
 	"github.com/uber/jaeger-client-go"
 	jaegercfg "github.com/uber/jaeger-client-go/config"
+	"github.com/xxjwxc/public/dev"
 	"github.com/xxjwxc/public/message"
 	"github.com/xxjwxc/public/mylog"
 )
@@ -69,7 +70,7 @@ func initTrace() {
 		}
 
 		report := &jaegercfg.ReporterConfig{
-			LogSpans:            true,
+			LogSpans:            dev.IsDev(),
 			BufferFlushInterval: 1 * time.Second,
 			LocalAgentHostPort:  _jaegerInfo.addr,
 		}
