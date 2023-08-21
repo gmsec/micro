@@ -62,7 +62,7 @@ func initTrace() {
 	if len(_jaegerInfo.addr) > 0 && len(serviceName) > 0 {
 		jcfg := jaegercfg.Configuration{
 			Sampler: &jaegercfg.SamplerConfig{
-				Type:  "probabilistic",
+				Type:  jaeger.SamplerTypeProbabilistic,
 				Param: _jaegerInfo.percent,
 			},
 			ServiceName: serviceName,
