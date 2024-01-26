@@ -12,6 +12,7 @@ import (
 	"github.com/opentracing/opentracing-go"
 	"github.com/opentracing/opentracing-go/ext"
 	"github.com/opentracing/opentracing-go/log"
+	"github.com/xxjwxc/public/tools"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/grpclog"
 )
@@ -37,8 +38,8 @@ func UnaryServerInterceptor(opts ...Option) grpc.UnaryServerInterceptor {
 		}
 		resp, err := handler(newCtx, req)
 		if o.debug {
-			serverSpan.SetTag("req", req)
-			serverSpan.SetTag("resp", resp)
+			serverSpan.SetTag("req", tools.JSONDecode(req))
+			serverSpan.SetTag("resp", tools.JSONDecode(resp))
 		}
 		finishServerSpan(ctx, serverSpan, err)
 		return resp, err
