@@ -9,9 +9,10 @@ import (
 	"github.com/gmsec/micro/registry"
 	"github.com/gmsec/micro/tracer"
 
+	"github.com/xxjwxc/public/dev"
 	"github.com/xxjwxc/public/mylog"
 
-	grpc_opentracing "github.com/grpc-ecosystem/go-grpc-middleware/tracing/opentracing"
+	"github.com/gmsec/micro/grpc_opentracing"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/health"
 	"google.golang.org/grpc/health/grpc_health_v1"
@@ -158,7 +159,8 @@ func (s *namingResolver) GetServer() *grpc.Server {
 		trace := tracer.GetTracer()
 		if trace != nil {
 			s.opts.Server = grpc.NewServer(grpc.UnaryInterceptor(
-				grpc_opentracing.UnaryServerInterceptor(grpc_opentracing.WithTracer(trace))))
+				grpc_opentracing.UnaryServerInterceptor(grpc_opentracing.WithTracer(trace),
+					grpc_opentracing.WithDev(dev.IsDev()))))
 		} else {
 			s.opts.Server = grpc.NewServer()
 		}
