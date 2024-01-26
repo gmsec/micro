@@ -38,8 +38,8 @@ func UnaryServerInterceptor(opts ...Option) grpc.UnaryServerInterceptor {
 		}
 		resp, err := handler(newCtx, req)
 		if o.debug {
-			serverSpan.SetTag("req", tools.JSONDecode(req))
-			serverSpan.SetTag("resp", tools.JSONDecode(resp))
+			serverSpan.SetTag("request", tools.JSONDecode(req))
+			serverSpan.SetTag("response", tools.JSONDecode(resp))
 		}
 		finishServerSpan(ctx, serverSpan, err)
 		return resp, err
