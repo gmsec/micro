@@ -64,7 +64,9 @@ func (c *namingResolver) String() string {
 
 // initResolver 注册平衡器
 func (c *namingResolver) initResolver() {
-	resolver.Register(&resolverBuilder{scheme: c.opts.Scheme, regNaming: c.opts.Registry.RegNaming})
+	if c.opts.Registry != nil {
+		resolver.Register(&resolverBuilder{scheme: c.opts.Scheme, regNaming: c.opts.Registry.RegNaming})
+	}
 }
 
 // Next connon
