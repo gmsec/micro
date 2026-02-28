@@ -10,7 +10,7 @@ require (
 	github.com/opentracing/opentracing-go v1.2.0
 	github.com/stretchr/testify v1.11.1
 	github.com/uber/jaeger-client-go v2.30.0+incompatible
-	github.com/xxjwxc/public v0.0.0-20260122140710-6f7ba42fba78
+	github.com/xxjwxc/public v0.0.0-20260228072651-9aec6824e727
 	golang.org/x/net v0.51.0
 	google.golang.org/grpc v1.79.1
 )

@@ -96,8 +96,8 @@ github.com/uber/jaeger-lib v2.4.1+incompatible h1:td4jdvLcExb4cBISKIpHuGoVXh+dVK
 github.com/uber/jaeger-lib v2.4.1+incompatible/go.mod h1:ComeNDZlWwrWnDv8aPp0Ba6+uUTzImX/AauajbLI56U=
 github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e h1:JVG44RsyaB9T2KIHavMF/ppJZNG9ZpyihvCd0w101no=
 github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e/go.mod h1:RbqR21r5mrJuqunuUZ/Dhy/avygyECGrLceyNeo4LiM=
-github.com/xxjwxc/public v0.0.0-20260122140710-6f7ba42fba78 h1:1iVA4ytbBDkaVbYD7InmwSVbQLAg2MlGnOoQia3TBVw=
-github.com/xxjwxc/public v0.0.0-20260122140710-6f7ba42fba78/go.mod h1:f1MMhb8w44ucE6RC3g14UVcDiLcs19bFfu0TqOQmHUI=
+github.com/xxjwxc/public v0.0.0-20260228072651-9aec6824e727 h1:s4gmnhqi0SslFLKWVzLVuJZtdRTZCRLHM2MnzdjF4HY=
+github.com/xxjwxc/public v0.0.0-20260228072651-9aec6824e727/go.mod h1:f1MMhb8w44ucE6RC3g14UVcDiLcs19bFfu0TqOQmHUI=
 github.com/yuin/goldmark v1.1.27/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=
 github.com/yuin/goldmark v1.2.1/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=
 github.com/yuin/goldmark v1.3.5/go.mod h1:mwnBkeHKe2W/ZEtQ+71ViKU8L12m81fl3OWwC1Zlc8k=
