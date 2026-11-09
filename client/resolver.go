@@ -4,6 +4,7 @@ import (
 	"errors"
 	"sort"
 	"sync"
+	"time"
 
 	"github.com/gmsec/micro/naming"
 	"github.com/gmsec/micro/registry"
@@ -15,6 +16,10 @@ import (
 
 // ErrResolveNoNaming 没有注册服务发现实现时使用
 var ErrResolveNoNaming = errors.New("micro: no naming registry configured, cannot resolve target")
+
+// maxReconnectBackoff 是 watcher 重建的最大退避间隔。
+// 注册中心重启时客户端不应该跟着退出,也不应该每秒重试一次打爆注册中心。
+const maxReconnectBackoff = 30 * time.Second
 
 type resolverBuilder struct {
 	scheme    string
@@ -38,6 +43,11 @@ func (rb *resolverBuilder) Build(target resolver.Target, cc resolver.ClientConn,
 		watcher:    watcher,
 		addrsStore: make(map[string]*naming.Update),
 		done:       make(chan struct{}),
+		// 出错后重建 watcher 用的是同一个 target,
+		// 地址表在重建期间保持不变,客户端可以继续用旧地址发请求。
+		resolve: func() (naming.Watcher, error) {
+			return rb.regNaming.Resolve(ep)
+		},
 	}
 
 	r.start()
@@ -47,13 +57,16 @@ func (rb *resolverBuilder) Build(target resolver.Target, cc resolver.ClientConn,
 func (rb *resolverBuilder) Scheme() string { return rb.scheme }
 
 type myResolver struct {
-	target  resolver.Target
-	cc      resolver.ClientConn
-	watcher naming.Watcher
+	target resolver.Target
+	cc     resolver.ClientConn
 
-	// mu 保护 addrsStore;同时保证 UpdateState 的调用顺序与 map 内容一致
+	// mu 保护 addrsStore,以及 watcher 的重建/替换
 	mu         sync.Mutex
 	addrsStore map[string]*naming.Update
+	watcher    naming.Watcher
+
+	// resolve 用于 watcher 出错后重建(注册中心重启/网络抖动)
+	resolve func() (naming.Watcher, error)
 
 	// done 关闭表示 resolver 已被 grpc 释放,后台 goroutine 需要退出
 	done     chan struct{}
@@ -62,6 +75,7 @@ type myResolver struct {
 
 func (r *myResolver) start() {
 	go func() {
+		backoff := time.Second
 		for {
 			// 已经被关闭,直接退出,不再发起新的查询
 			select {
@@ -70,17 +84,51 @@ func (r *myResolver) start() {
 			default:
 			}
 
-			updates, err := r.watcher.Next()
-			if err != nil {
-				select {
-				case <-r.done: // Close() 引发的正常退出
-				default:
-					grpclog.Warningf("grpc: the naming watcher stops working due to %v.", err)
-					mylog.Error(err)
-				}
+			w := r.currentWatcher()
+			if w == nil {
 				return
 			}
 
+			updates, err := w.Next()
+			if err != nil {
+				select {
+				case <-r.done: // Close() 引发的正常退出
+					return
+				default:
+				}
+				grpclog.Warningf("grpc: the naming watcher stops working due to %v, will retry.", err)
+				mylog.Error(err)
+
+				// 注册中心抖动时保留最后一份地址列表继续服务,
+				// 退避后重建 watcher,而不是让 goroutine 直接退出。
+				// 历史实现收到错误就 return,导致一次抖动之后该客户端永久停留在旧地址表上。
+				select {
+				case <-r.done:
+					return
+				case <-time.After(backoff):
+				}
+
+				if backoff < maxReconnectBackoff {
+					backoff *= 2
+					if backoff > maxReconnectBackoff {
+						backoff = maxReconnectBackoff
+					}
+				}
+
+				if r.resolve == nil {
+					return
+				}
+				nw, e := r.resolve()
+				if e != nil {
+					mylog.Error(e)
+					continue
+				}
+				r.setWatcher(nw)
+				mylog.Infof("grpc: naming watcher for %v reconnected", r.target.Endpoint())
+				continue
+			}
+
+			backoff = time.Second
 			if r.apply(updates) {
 				r.push()
 			}
@@ -133,6 +181,23 @@ func (r *myResolver) push() {
 	}
 }
 
+func (r *myResolver) currentWatcher() naming.Watcher {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.watcher
+}
+
+func (r *myResolver) setWatcher(w naming.Watcher) {
+	r.mu.Lock()
+	old := r.watcher
+	r.watcher = w
+	r.mu.Unlock()
+
+	if old != nil && old != w {
+		old.Close()
+	}
+}
+
 func (*myResolver) ResolveNow(o resolver.ResolveNowOptions) {
 	// 本实现由 watcher 持续推送更新,无需响应主动解析请求
 }
@@ -141,7 +206,9 @@ func (r *myResolver) Close() {
 	r.closeOne.Do(func() {
 		close(r.done)
 		// 关闭 watcher 让阻塞中的 Next() 立刻返回,否则后台 goroutine 永久泄漏
-		r.watcher.Close()
+		if w := r.currentWatcher(); w != nil {
+			w.Close()
+		}
 	})
 	mylog.Debugf("Close:%v", r.target.Endpoint())
 }

@@ -48,11 +48,15 @@ func (c *namingResolver) Init(opts ...Option) error {
 		c.pool.Unlock()
 	}
 
-	if len(c.opts.serviceName) > 0 && c.opts.Registry != nil {
+	if c.opts.Registry != nil {
 		// init registry parms
-		c.opts.Registry.RegNaming.Init(registry.WithServiceName(c.opts.serviceName),
-			registry.WithTimeout(c.opts.RegisterTTL),
-		)
+		//
+		// 这里**不能**传 registry.WithServiceName。RegNaming 是进程内共享的单例,
+		// 它的 ServiceName 决定注册端往哪个服务名下写、Deregister 时删哪个 key。
+		// 客户端要发现的服务只体现在 Resolve(target) 的入参上。
+		// 历史实现把 c.opts.serviceName 写进去,导致后登记的下游服务会覆盖注册端的服务名:
+		// 本服务被注册到别人的服务名下,或者停机时删掉了别人的 key。
+		c.opts.Registry.RegNaming.Init(registry.WithTimeout(c.opts.RegisterTTL))
 	}
 
 	return nil
