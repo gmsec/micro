@@ -25,6 +25,11 @@ type Options struct {
 	// The interval on which to register
 	RegisterInterval time.Duration
 
+	// DeregisterDelay 注销后等待流量摘除的时长(替代硬编码的 time.Sleep(time.Second))
+	DeregisterDelay time.Duration
+	// StopTimeout 优雅关闭 gRPC server 的最长等待时间
+	StopTimeout time.Duration
+
 	Registry *registry.Registry
 
 	Server   *grpc.Server
@@ -52,16 +57,36 @@ func RegisterInterval(t time.Duration) Option {
 	}
 }
 
+// DeregisterDelay 设置注销后等待流量摘除的时长
+func DeregisterDelay(t time.Duration) Option {
+	return func(o *Options) {
+		o.DeregisterDelay = t
+	}
+}
+
+// StopTimeout 设置优雅关闭 gRPC server 的最长等待时间
+func StopTimeout(t time.Duration) Option {
+	return func(o *Options) {
+		o.StopTimeout = t
+	}
+}
+
 func newOptions(opt ...Option) Options {
 	opts := Options{
 		// Codecs:           make(map[string]codec.NewCodec),
 		// Metadata:         map[string]string{},
 		RegisterInterval: DefaultRegisterInterval,
 		RegisterTTL:      DefaultRegisterTTL,
+		DeregisterDelay:  DefaultDeregisterDelay,
+		StopTimeout:      DefaultStopTimeout,
 	}
 
 	for _, o := range opt {
 		o(&opts)
+	}
+
+	if opts.StopTimeout <= 0 {
+		opts.StopTimeout = DefaultStopTimeout
 	}
 
 	if len(opts.Address) == 0 {
@@ -73,7 +98,7 @@ func newOptions(opt ...Option) Options {
 	}
 
 	if len(opts.ID) == 0 {
-		opts.ID = DefaultID
+		opts.ID = NewID() // 每个实例独立 ID,避免多实例在注册中心互相覆盖
 	}
 
 	if len(opts.Version) == 0 {

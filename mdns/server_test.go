@@ -1,6 +1,7 @@
 package mdns
 
 import (
+	"fmt"
 	"testing"
 	"time"
 )
@@ -24,24 +25,28 @@ func TestServer_Lookup(t *testing.T) {
 	entries := make(chan *ServiceEntry, 1)
 	found := false
 	doneCh := make(chan struct{})
+	errCh := make(chan error, 1)
 	go func() {
+		defer close(doneCh)
 		select {
 		case e := <-entries:
 			if e.Name != "hostname._foobar._tcp.local." {
-				t.Fatalf("bad: %v", e)
+				errCh <- fmt.Errorf("bad name: %v", e)
+				return
 			}
 			if e.Port != 80 {
-				t.Fatalf("bad: %v", e)
+				errCh <- fmt.Errorf("bad port: %v", e)
+				return
 			}
 			if e.Info != "Local web server" {
-				t.Fatalf("bad: %v", e)
+				errCh <- fmt.Errorf("bad info: %v", e)
+				return
 			}
 			found = true
 
 		case <-time.After(80 * time.Millisecond):
-			t.Fatalf("timeout")
+			errCh <- fmt.Errorf("timeout")
 		}
-		close(doneCh)
 	}()
 
 	params := &QueryParam{
@@ -55,6 +60,11 @@ func TestServer_Lookup(t *testing.T) {
 		t.Fatalf("err: %v", err)
 	}
 	<-doneCh
+	select {
+	case err := <-errCh: // 子 goroutine 里的错误不能在子 goroutine 里直接 Fatal
+		t.Fatal(err)
+	default:
+	}
 	if !found {
 		t.Fatalf("record not found")
 	}

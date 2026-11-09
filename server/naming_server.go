@@ -31,7 +31,8 @@ type namingResolver struct {
 	sync.RWMutex
 	// marks the serve as started
 	started bool
-	//exit    chan chan error
+	// health 健康检查服务,用于停机时先把状态置为 NOT_SERVING
+	health *health.Server
 }
 
 // NewNamingResolver new one
@@ -39,12 +40,6 @@ func NewNamingResolver(opts ...Option) *namingResolver {
 	resp := &namingResolver{}
 
 	resp.Init(opts...)
-
-	// if resp.opts.Registry == nil {
-	// 	resp.opts.Registry = &registry.Registry{
-	// 		RegNaming: registry.NewDNSNamingRegistry(),
-	// 	}
-	// }
 
 	return resp
 }
@@ -96,15 +91,18 @@ func (s *namingResolver) Start() error {
 
 	// 开始注册
 	reg := s.opts.Registry.RegNaming
-	if err := reg.Register(s.opts.Address, nil); err != nil {
-		mylog.ErrorString("gRPC Server register error:")
-		mylog.Error(err)
+	if reg != nil {
+		if err := reg.Register(s.opts.Address, nil); err != nil {
+			mylog.ErrorString("gRPC Server register error:")
+			mylog.Error(err)
+		}
 	}
 
 	// 健康检查
 	hsrv := health.NewServer()
 	grpc_health_v1.RegisterHealthServer(gs, hsrv)
 	hsrv.SetServingStatus("", grpc_health_v1.HealthCheckResponse_SERVING)
+	s.health = hsrv
 
 	// micro: go ts.Accept(s.accept)
 	go func() {
@@ -125,24 +123,69 @@ func (s *namingResolver) Stop() error {
 		s.RUnlock()
 		return nil
 	}
+	hsrv := s.health
+	delay := s.opts.DeregisterDelay
+	stopTimeout := s.opts.StopTimeout
+	var reg registry.RegNaming
+	if s.opts.Registry != nil {
+		reg = s.opts.Registry.RegNaming
+	}
 	s.RUnlock()
 
-	gs := s.GetServer()
-	reg := s.opts.Registry.RegNaming
-	reg.Deregister()
+	// 1. 先置为不健康,让调用方(负载均衡/健康检查)尽快把流量摘除
+	if hsrv != nil {
+		hsrv.SetServingStatus("", grpc_health_v1.HealthCheckResponse_NOT_SERVING)
+	}
+
+	// 2. 注销服务
+	if reg != nil {
+		if err := reg.Deregister(); err != nil {
+			mylog.Error(err)
+		}
+	}
+
 	tracer.CloseTracer() // 关闭链路追踪
 
-	// paus one second
-	select {
-	case <-time.After(time.Second):
-		gs.Stop()
+	// 3. 留出摘流时间后再停止 gRPC 监听(时长可配置,默认 1s)
+	if delay > 0 {
+		time.Sleep(delay)
 	}
+	stopGrpc(s.GetServer(), stopTimeout)
 
 	s.Lock()
 	s.started = false
+	s.health = nil
 	s.Unlock()
 
 	return nil
+}
+
+// stopGrpc 先尝试优雅关闭,超过 timeout 后强制停止。
+// 历史上的直接 Stop() 会立即断开在途请求,导致客户端收到 Unavailable。
+func stopGrpc(gs *grpc.Server, timeout time.Duration) {
+	if gs == nil {
+		return
+	}
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		gs.GracefulStop()
+	}()
+
+	if timeout <= 0 {
+		gs.Stop()
+		<-done
+		return
+	}
+
+	t := time.NewTimer(timeout)
+	defer t.Stop()
+	select {
+	case <-done:
+	case <-t.C: // 超时,强制关闭
+		gs.Stop()
+		<-done
+	}
 }
 
 // String name string
@@ -184,9 +227,13 @@ func (s *namingResolver) SetListener(l net.Listener) bool {
 }
 
 func (s *namingResolver) SetAddress(add string) {
+	s.Lock()
+	defer s.Unlock()
 	s.opts.Address = add
 }
 
 func (s *namingResolver) GetAddress() string {
+	s.RLock()
+	defer s.RUnlock()
 	return s.opts.Address
 }

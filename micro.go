@@ -1,6 +1,7 @@
 package micro
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/signal"
@@ -64,13 +65,6 @@ func NewService(opts ...Option) Service {
 
 func newService(opts ...Option) Service {
 	options := newOptions(opts...)
-
-	// options.Client = &clientWrapper{
-	// 	options.Client,
-	// 	metadata.Metadata{
-	// 		HeaderPrefix + "From-Service": options.Server.Options().Name,
-	// 	},
-	// }
 
 	s := &service{
 		opts: options,
@@ -159,12 +153,18 @@ func (s *service) Run() error {
 
 	// s.cc = make(chan os.Signal, 1)
 	signal.Notify(s.cc, syscall.SIGTERM, syscall.SIGINT, syscall.SIGQUIT)
+	defer signal.Stop(s.cc)
+
+	ctx := s.opts.Context
+	if ctx == nil {
+		ctx = context.Background()
+	}
 
 	select {
 	// wait on kill signal
 	case <-s.cc:
 	// wait on context cancel
-	case <-s.opts.Context.Done():
+	case <-ctx.Done():
 	}
 	return s.Stop()
 }
@@ -176,51 +176,52 @@ func (s *service) String() string {
 
 // Start starts the default server
 func (s *service) Start() error {
-	// for _, fn := range s.BeforeStart {
-	// 	if err := fn(); err != nil {
-	// 		return err
-	// 	}
-	// }
+	for _, fn := range s.BeforeStart {
+		if err := fn(); err != nil {
+			return err
+		}
+	}
 
-	///start func
-	s.opts.Server.Start()
+	if err := s.opts.Server.Start(); err != nil {
+		return err
+	}
 
-	// register service
-
-	/// -------
-
-	// for _, fn := range s.AfterStart {
-	// 	if err := fn(); err != nil {
-	// 		return err
-	// 	}
-	// }
+	for _, fn := range s.AfterStart {
+		if err := fn(); err != nil {
+			return err
+		}
+	}
 
 	return nil
 }
 
 // NotifyStop 发送停止信号
 func (s *service) NotifyStop() {
-	s.cc <- syscall.SIGINT
+	select {
+	case s.cc <- syscall.SIGINT:
+	default: // 已经有待处理的停止信号,不阻塞调用方
+	}
 }
 
 // Stop stops the default server
 func (s *service) Stop() error {
-
 	var gerr error
 
-	// for _, fn := range s.BeforeStop {
-	// 	if err := fn(); err != nil {
-	// 		gerr = err
-	// 	}
-	// }
+	for _, fn := range s.BeforeStop {
+		if err := fn(); err != nil {
+			gerr = err
+		}
+	}
 
-	s.opts.Server.Stop()
+	if err := s.opts.Server.Stop(); err != nil {
+		gerr = err
+	}
 
-	// for _, fn := range s.AfterStop {
-	// 	if err := fn(); err != nil {
-	// 		gerr = err
-	// 	}
-	// }
+	for _, fn := range s.AfterStop {
+		if err := fn(); err != nil {
+			gerr = err
+		}
+	}
 
 	return gerr
 }

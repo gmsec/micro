@@ -19,6 +19,7 @@ type profiler struct {
 	sync.Mutex
 	running bool
 	exit    chan bool
+	wg      sync.WaitGroup
 
 	// where the cpu profile is written
 	cpuFile *os.File
@@ -27,6 +28,7 @@ type profiler struct {
 }
 
 func (p *profiler) writeHeap(f *os.File) {
+	defer p.wg.Done()
 	defer f.Close()
 
 	t := time.NewTicker(time.Second * 30)
@@ -74,15 +76,19 @@ func (p *profiler) Start() error {
 
 	f2, err := os.Create(memFile)
 	if err != nil {
+		f1.Close() // 避免 cpu 文件句柄泄漏
 		return err
 	}
 
 	// start cpu profiling
 	if err := pprof.StartCPUProfile(f1); err != nil {
+		f1.Close()
+		f2.Close()
 		return err
 	}
 
 	// write the heap periodically
+	p.wg.Add(1)
 	go p.writeHeap(f2)
 
 	// set cpu file
@@ -99,18 +105,22 @@ func (p *profiler) Stop() error {
 	p.Lock()
 	defer p.Unlock()
 
-	select {
-	case <-p.exit:
-		return nil
-	default:
-		close(p.exit)
-		pprof.StopCPUProfile()
-		p.cpuFile.Close()
-		p.running = false
-		p.cpuFile = nil
-		p.memFile = nil
+	if !p.running || p.exit == nil { // 未启动时直接返回,避免 close(nil) panic
 		return nil
 	}
+
+	close(p.exit)
+	pprof.StopCPUProfile()
+	p.cpuFile.Close()
+
+	// 等 writeHeap 退出并关掉 mem 文件,避免它写向已关闭的文件
+	p.wg.Wait()
+
+	p.running = false
+	p.exit = nil
+	p.cpuFile = nil
+	p.memFile = nil
+	return nil
 }
 
 func (p *profiler) String() string {

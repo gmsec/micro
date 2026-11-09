@@ -130,12 +130,16 @@ func SpanWithLog(arg ...interface{}) SpanOption {
 }
 
 func Start(spanName string, ctx context.Context) (newCtx context.Context, finish func(...SpanOption), err error) {
+	var cancel context.CancelFunc
 	if ctx == nil {
-		ctx, _ = context.WithTimeout(context.Background(), 3*time.Second)
+		ctx, cancel = context.WithTimeout(context.Background(), 3*time.Second)
 	}
 
 	_trace := GetTracer()
 	if _trace == nil {
+		if cancel != nil {
+			cancel()
+		}
 		err = message.GetError(message.InvalidArgument)
 		return
 	}
@@ -149,6 +153,9 @@ func Start(spanName string, ctx context.Context) (newCtx context.Context, finish
 			o(span)
 		}
 		span.Finish()
+		if cancel != nil { // 释放 Start 内部创建的 ctx 超时定时器
+			cancel()
+		}
 	}
 
 	return

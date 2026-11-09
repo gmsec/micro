@@ -40,7 +40,7 @@ func TestMain(t *testing.T) {
 	service.Options()
 	service.Client()
 	service.Server()
-	service.String()
+	_ = service.String()
 	service.Stop()
 
 	// process, _ := os.FindProcess(os.Getpid())

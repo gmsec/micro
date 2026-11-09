@@ -12,35 +12,20 @@ import (
 
 // Options ...
 type Options struct {
-	// Broker    broker.Broker
-	// Cmd       cmd.Cmd
 	Client   client.Client
 	Server   server.Server
 	Registry *registry.Registry
 
-	// Registry  registry.Registry
-	// Transport transport.Transport
-
-	// // Before and After funcs
-	// BeforeStart []func() error
-	// BeforeStop  []func() error
-	// AfterStart  []func() error
-	// AfterStop   []func() error
-
-	// // Other options for implementations of the interface
-	// // can be stored in a context
+	// Other options for implementations of the interface
+	// can be stored in a context
 	Context context.Context
 }
 
 // newOptions default of option define
 func newOptions(opts ...Option) Options {
-	// reg := registry.NewDNSNamingRegistry()
 	opt := Options{
-		Client: client.NewClient(),
-		Server: server.NewServer(),
-		// Registry: &registry.Registry{
-		// 	RegNaming: reg,
-		// },
+		Client:  client.NewClient(),
+		Server:  server.NewServer(),
 		Context: context.Background(),
 	}
 
@@ -60,11 +45,11 @@ func newOptions(opts ...Option) Options {
 
 // WithName of the service . Specify service name (Group)
 func WithName(n string) Option {
-	tracer.SetServiceName(n)
 	return func(o *Options) {
+		// 副作用放在 Option 被应用时执行:只构造 Option 而不传给 NewService 不应该改变全局状态
+		tracer.SetServiceName(n)
 		o.Server.Init(server.Name(n))
 		o.Client.Init(client.WithServiceName(n))
-		//o.Server.Name = n
 	}
 }
 

@@ -92,6 +92,14 @@ func WithPoolTTL(d time.Duration) Option {
 	}
 }
 
+// WithTimeOut 设置建连(dial)超时。默认为 DefaultPoolTimeout。
+// 对应 pool.getConn 里 grpc.DialContext 的 context 超时，防止服务不可达时建连无限阻塞。
+func WithTimeOut(d time.Duration) Option {
+	return func(o *Options) {
+		o.TimeOut = d
+	}
+}
+
 // WithRegistryNaming 注册naming 服务发现
 func WithRegistryNaming(reg registry.RegNaming) Option {
 	return func(o *Options) {

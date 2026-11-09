@@ -86,10 +86,9 @@ func Query(params *QueryParam) error {
 		if params.Timeout == 0 {
 			params.Timeout = time.Second
 		}
-		params.Context, _ = context.WithTimeout(context.Background(), params.Timeout)
-		if err != nil {
-			return err
-		}
+		var cancel context.CancelFunc
+		params.Context, cancel = context.WithTimeout(context.Background(), params.Timeout)
+		defer cancel()
 	}
 
 	// Run the query
@@ -148,8 +147,6 @@ func Listen(entries chan<- *ServiceEntry, exit chan struct{}) error {
 			}
 		}
 	}
-
-	return nil
 }
 
 // Lookup is the same as Query, however it uses all the default parameters
@@ -203,6 +200,9 @@ func newClient() (*client, error) {
 	}
 
 	if mconn4 == nil && mconn6 == nil {
+		// 历史实现直接返回,已打开的单播 socket 会泄漏
+		uconn4.Close()
+		uconn6.Close()
 		return nil, fmt.Errorf("failed to bind to any multicast udp port")
 	}
 
@@ -236,7 +236,12 @@ func newClient() (*client, error) {
 	}
 
 	if len(ifaces) == errCount1 && len(ifaces) == errCount2 {
-		return nil, fmt.Errorf("Failed to join multicast group on all interfaces!")
+		// 所有网卡都加入组播失败:释放上面已打开的所有 socket
+		uconn4.Close()
+		uconn6.Close()
+		mconn4.Close()
+		mconn6.Close()
+		return nil, fmt.Errorf("failed to join multicast group on all interfaces")
 	}
 
 	c := &client{
@@ -401,7 +406,9 @@ func (c *client) recv(l *net.UDPConn, msgCh chan *dns.Msg) {
 		c.closeLock.Unlock()
 		n, err := l.Read(buf)
 		if err != nil {
-			continue
+			// 连接已关闭或无效。历史实现在这里 continue,
+			// 当 conn 实际不可用时会变成死循环把 CPU 打满,所以直接退出。
+			return
 		}
 		msg := new(dns.Msg)
 		if err := msg.Unpack(buf[:n]); err != nil {

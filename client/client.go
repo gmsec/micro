@@ -1,8 +1,12 @@
 package client
 
 import (
+	"errors"
 	"time"
 )
+
+// ErrClientNotRegistered client 未登记时返回的错误
+var ErrClientNotRegistered = errors.New("micro: client not registered")
 
 // Client is the interface used to make requests to services.
 // It supports Request/Response via Transport and Publishing via the Broker.
@@ -70,7 +74,7 @@ func newNamingClient(opts ...Option) Client {
 		// wg:          wait(options.Context),
 	}
 	// rc.once.Store(false)
-	rc.pool = newPool(options.PoolSize, options.PoolTTL, rc.poolMaxIdle(), rc.poolMaxStreams(), false, options.TimeOut)
+	rc.pool = newPool(options.PoolSize, options.PoolTTL, rc.poolMaxIdle(), rc.poolMaxStreams(), options.TimeOut)
 
 	return rc
 }
@@ -87,7 +91,7 @@ func newIPAddrClient(opts ...Option) Client {
 		// wg:          wait(options.Context),
 	}
 	// rc.once.Store(false)
-	rc.pool = newPool(options.PoolSize, options.PoolTTL, rc.poolMaxIdle(), rc.poolMaxStreams(), true, options.TimeOut)
+	rc.pool = newPool(options.PoolSize, options.PoolTTL, rc.poolMaxIdle(), rc.poolMaxStreams(), options.TimeOut)
 
 	return rc
 }

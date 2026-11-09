@@ -53,16 +53,28 @@ type poolConn struct {
 	in   bool
 }
 
-func newPool(size int, ttl time.Duration, idle int, ms int, isIPAddr bool, timeOut time.Duration) *pool {
+func newPool(size int, ttl time.Duration, idle int, ms int, timeOut time.Duration) *pool {
 	if ms <= 0 {
 		ms = 1
 	}
 	if idle < 0 {
 		idle = 0
 	}
+	if size < 0 { // size==0 表示不池化(每次建连、用完即关),保持原有语义
+		size = 0
+	}
+	if timeOut <= 0 {
+		timeOut = DefaultPoolTimeout
+	}
+	// ttl 以秒存储。不足 1s 时会被截断为 0,
+	// 导致 getConn 里"now-created > ttl"恒成立、连接永远被当成过期,所以这里保底 1s。
+	sec := int64(ttl.Seconds())
+	if sec <= 0 {
+		sec = 1
+	}
 	return &pool{
 		size:       size,
-		ttl:        int64(ttl.Seconds()),
+		ttl:        sec,
 		timeOut:    timeOut,
 		maxStreams: ms,
 		maxIdle:    idle,
@@ -92,7 +104,9 @@ func (p *pool) getConn(addr string, opts ...grpc.DialOption) (*poolConn, error) 
 			next := conn.next
 			if conn.streams == 0 {
 				removeConn(conn)
-				sp.idle--
+				if sp.idle > 0 {
+					sp.idle--
+				}
 			}
 			conn = next
 			continue
@@ -101,7 +115,9 @@ func (p *pool) getConn(addr string, opts ...grpc.DialOption) (*poolConn, error) 
 			if conn.streams == 0 {
 				removeConn(conn)
 				conn.ClientConn.Close()
-				sp.idle--
+				if sp.idle > 0 {
+					sp.idle--
+				}
 			}
 			conn = next
 			continue
@@ -114,7 +130,9 @@ func (p *pool) getConn(addr string, opts ...grpc.DialOption) (*poolConn, error) 
 			if conn.streams == 0 {
 				removeConn(conn)
 				conn.ClientConn.Close()
-				sp.idle--
+				if sp.idle > 0 {
+					sp.idle--
+				}
 			}
 			conn = next
 			continue
@@ -128,7 +146,7 @@ func (p *pool) getConn(addr string, opts ...grpc.DialOption) (*poolConn, error) 
 			continue
 		}
 		//  a idle conn
-		if conn.streams == 0 {
+		if conn.streams == 0 && sp.idle > 0 {
 			sp.idle--
 		}
 		//  a good conn
@@ -139,7 +157,13 @@ func (p *pool) getConn(addr string, opts ...grpc.DialOption) (*poolConn, error) 
 	p.Unlock()
 
 	//  create new conn
-	ctx, cel := context.WithTimeout(context.Background(), p.timeOut)
+	p.Lock()
+	timeOut := p.timeOut // 在锁内读取,避免与 Init 并发修改产生数据竞争
+	p.Unlock()
+	if timeOut <= 0 {
+		timeOut = DefaultPoolTimeout
+	}
+	ctx, cel := context.WithTimeout(context.Background(), timeOut)
 	defer cel()
 	cc, err := grpc.DialContext(ctx, addr, opts...)
 	if err != nil {
@@ -159,19 +183,26 @@ func (p *pool) getConn(addr string, opts ...grpc.DialOption) (*poolConn, error) 
 }
 
 func (p *pool) release(addr string, conn *poolConn, err error) {
-	p.Lock()
-	p, sp, created := conn.pool, conn.sp, conn.created
+	if conn == nil {
+		return
+	}
+	pl, sp, created := conn.pool, conn.sp, conn.created
+	if pl == nil || sp == nil || conn.ClientConn == nil {
+		return
+	}
+
+	pl.Lock()
 	//  try to add conn
-	if !conn.in && sp.count < p.size {
+	if !conn.in && sp.count < pl.size {
 		addConnAfter(conn, sp.head)
 	}
 	if !conn.in {
-		p.Unlock()
+		pl.Unlock()
 		conn.ClientConn.Close()
 		return
 	}
 	//  a busy conn
-	if conn.streams >= p.maxStreams {
+	if conn.streams >= pl.maxStreams {
 		removeConn(conn)
 		addConnAfter(conn, sp.head)
 	}
@@ -182,20 +213,35 @@ func (p *pool) release(addr string, conn *poolConn, err error) {
 		//  2. too many idle conn or
 		//  3. conn is too old
 		now := time.Now().Unix()
-		if err != nil || sp.idle >= p.maxIdle || now-created > p.ttl {
+		if err != nil || sp.idle >= pl.maxIdle || now-created > pl.ttl {
 			removeConn(conn)
-			p.Unlock()
+			pl.Unlock()
 			conn.ClientConn.Close()
 			return
 		}
 		sp.idle++
 	}
-	p.Unlock()
-	return
+	pl.Unlock()
 }
 
+// Close 归还连接。
 func (conn *poolConn) Close() {
+	if conn == nil {
+		return
+	}
 	conn.pool.release(conn.addr, conn, conn.err)
+}
+
+// CloseWithError 归还连接,并把本次调用的错误记录下来:
+// 出错的连接不会被放回空闲池,避免后续请求复用到坏连接。
+func (conn *poolConn) CloseWithError(err error) {
+	if conn == nil {
+		return
+	}
+	if err != nil {
+		conn.err = err
+	}
+	conn.Close()
 }
 
 func removeConn(conn *poolConn) {

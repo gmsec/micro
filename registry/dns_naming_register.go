@@ -175,31 +175,37 @@ func (r *dnsNamingWatcher) Next() ([]*naming.Update, error) {
 	r.Lock()
 	defer r.Unlock()
 
-	if !r.isInit { // first
-		r.isInit = true
-		timeout := r.timeout
-		defer func() {
-			if timeout > time.Second*3 {
-				timeout = time.Second * 3
-			}
-			r.timeout = timeout
-		}()
-		r.timeout = time.Millisecond * 100
+	// watcher 已关闭:立即返回错误让调用方(grpc resolver)退出,
+	// 否则调用方的后台 goroutine 会永久阻塞在这里。
+	if err := r.ctx.Err(); err != nil {
+		return nil, err
+	}
+
+	if r.isInit { // first
 		return r.getService()
 	}
 
+	r.isInit = true
+	timeout := r.timeout
+	defer func() {
+		if timeout > time.Second*3 {
+			timeout = time.Second * 3
+		}
+		r.timeout = timeout
+	}()
+	r.timeout = time.Millisecond * 100
 	return r.getService()
 }
 
 func (r *dnsNamingWatcher) getService() ([]*naming.Update, error) {
 	var serviceList []*naming.Update
 	entries := make(chan *mdns.ServiceEntry, 10)
-	done := make(chan bool)
+	done := make(chan struct{})
 
 	p := mdns.DefaultParams(r.serviceName)
-	// set context with timeout
+	// 继承 watcher 的 ctx:Close() 能立即打断正在进行的查询
 	var cancel context.CancelFunc
-	p.Context, cancel = context.WithTimeout(context.Background(), r.timeout)
+	p.Context, cancel = context.WithTimeout(r.ctx, r.timeout)
 	defer cancel()
 	// set entries channel
 	p.Entries = entries
@@ -207,6 +213,7 @@ func (r *dnsNamingWatcher) getService() ([]*naming.Update, error) {
 	p.Domain = r.domain
 
 	go func() {
+		defer close(done)
 		for {
 			select {
 			case e := <-entries:
@@ -233,19 +240,22 @@ func (r *dnsNamingWatcher) getService() ([]*naming.Update, error) {
 
 				serviceList = append(serviceList, &upInfo)
 			case <-p.Context.Done():
-				close(done)
 				return
 			}
 		}
 	}()
 
 	// execute the query
-	if err := mdns.Query(p); err != nil {
+	err := mdns.Query(p)
+
+	// 无论查询成功与否都等待收集 goroutine 退出,避免泄漏；
+	// Query 返回时 ctx 已经结束,goroutine 会立即退出。
+	cancel()
+	<-done
+
+	if err != nil {
 		return nil, err
 	}
-
-	// wait for completion
-	<-done
 
 	return serviceList, nil
 }

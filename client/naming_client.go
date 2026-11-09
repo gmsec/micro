@@ -26,6 +26,7 @@ type namingResolver struct {
 func (c *namingResolver) Init(opts ...Option) error {
 	size := c.opts.PoolSize
 	ttl := c.opts.PoolTTL
+	timeOut := c.opts.TimeOut
 
 	c.Lock()
 	defer c.Unlock()
@@ -34,11 +35,16 @@ func (c *namingResolver) Init(opts ...Option) error {
 		opt(&c.opts)
 	}
 
+	if c.opts.TimeOut <= 0 {
+		c.opts.TimeOut = DefaultPoolTimeout
+	}
+
 	// update pool configuration if the options changed
-	if size != c.opts.PoolSize || ttl != c.opts.PoolTTL {
+	if size != c.opts.PoolSize || ttl != c.opts.PoolTTL || timeOut != c.opts.TimeOut {
 		c.pool.Lock()
 		c.pool.size = c.opts.PoolSize
 		c.pool.ttl = int64(c.opts.PoolTTL.Seconds())
+		c.pool.timeOut = c.opts.TimeOut
 		c.pool.Unlock()
 	}
 
