@@ -1,6 +1,7 @@
 package client
 
 import (
+	"context"
 	"errors"
 	"time"
 )
@@ -18,6 +19,22 @@ type Client interface {
 	Next() (*poolConn, error) // next connon
 	//IsIpAddr() bool
 	// Copy() *Client
+}
+
+// ContextClient 是 Client 的可选能力:允许调用方把 ctx 透传到建连过程。
+// 刻意不把它加进 Client 接口,以免下游(goplugins、gmsec 等)自定义实现
+// 因为接口新增方法而编译失败;支持该能力的实现可通过类型断言使用。
+type ContextClient interface {
+	NextWithContext(ctx context.Context) (*poolConn, error)
+}
+
+// NextWithContext 获取连接并透传 ctx。若 c 实现了 ContextClient 则调用其
+// NextWithContext,否则退回旧方法 Next()(保持对自定义 Client 实现的兼容)。
+func NextWithContext(c Client, ctx context.Context) (*poolConn, error) {
+	if cc, ok := c.(ContextClient); ok {
+		return cc.NextWithContext(ctx)
+	}
+	return c.Next()
 }
 
 // Option used by the Client
@@ -58,23 +75,10 @@ var (
 func newNamingClient(opts ...Option) Client {
 	options := newOptions(opts...)
 
-	// if options.Registry == nil {
-	// 	options.Registry = &registry.Registry{
-	// 		RegNaming: registry.NewDNSNamingRegistry(),
-	// 	}
-	// }
-
 	rc := &namingResolver{
 		opts: options,
-		// register:registry.NewDNSNamingRegistry()
-		// router:      router,
-		// handlers:    make(map[string]Handler),
-		// subscribers: make(map[Subscriber][]broker.Subscriber),
-		// exit:        make(chan chan error),
-		// wg:          wait(options.Context),
 	}
-	// rc.once.Store(false)
-	rc.pool = newPool(options.PoolSize, options.PoolTTL, rc.poolMaxIdle(), rc.poolMaxStreams(), options.TimeOut)
+	rc.pool = newPool(options.PoolSize, options.PoolTTL, rc.poolMaxIdle(options), rc.poolMaxStreams(options), options.TimeOut)
 
 	return rc
 }
@@ -82,16 +86,11 @@ func newNamingClient(opts ...Option) Client {
 func newIPAddrClient(opts ...Option) Client {
 	options := newOptions(opts...)
 	rc := &namingResolver{
-		//opts: options,
-		// register:registry.NewDNSNamingRegistry()
-		// router:      router,
-		// handlers:    make(map[string]Handler),
-		// subscribers: make(map[Subscriber][]broker.Subscriber),
-		// exit:        make(chan chan error),
-		// wg:          wait(options.Context),
+		// 历史实现漏了 opts,导致 rc.opts 为零值 Options:
+		// Init 会把 pool.size/ttl 写成 0,直连模式每次 RPC 都重新 Dial。
+		opts: options,
 	}
-	// rc.once.Store(false)
-	rc.pool = newPool(options.PoolSize, options.PoolTTL, rc.poolMaxIdle(), rc.poolMaxStreams(), options.TimeOut)
+	rc.pool = newPool(options.PoolSize, options.PoolTTL, rc.poolMaxIdle(options), rc.poolMaxStreams(options), options.TimeOut)
 
 	return rc
 }

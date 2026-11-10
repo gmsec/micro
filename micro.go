@@ -15,6 +15,7 @@ import (
 	"github.com/gmsec/micro/profile/pprof"
 	"github.com/gmsec/micro/registry"
 	"github.com/gmsec/micro/server"
+	"github.com/gmsec/micro/tracer"
 )
 
 // Service is an interface that wraps the lower level libraries
@@ -45,6 +46,8 @@ type Service interface {
 type service struct {
 	opts Options
 	once sync.Once
+	// stopOnce 保证 Stop 的清理(含 tracer 引用计数)只执行一次
+	stopOnce sync.Once
 
 	// Before and After funcs
 	BeforeStart []func() error
@@ -77,6 +80,7 @@ func newService(opts ...Option) Service {
 	} else {
 		mylog.Info(fmt.Sprintf("service [%v] existed.", s.Name()))
 	}
+	addServiceRef() // 与 Stop() 中的 dropServiceRef 配对
 	return s
 }
 
@@ -206,22 +210,28 @@ func (s *service) NotifyStop() {
 // Stop stops the default server
 func (s *service) Stop() error {
 	var gerr error
+	s.stopOnce.Do(func() {
+		for _, fn := range s.BeforeStop {
+			if err := fn(); err != nil {
+				gerr = err
+			}
+		}
 
-	for _, fn := range s.BeforeStop {
-		if err := fn(); err != nil {
+		if err := s.opts.Server.Stop(); err != nil {
 			gerr = err
 		}
-	}
 
-	if err := s.opts.Server.Stop(); err != nil {
-		gerr = err
-	}
-
-	for _, fn := range s.AfterStop {
-		if err := fn(); err != nil {
-			gerr = err
+		for _, fn := range s.AfterStop {
+			if err := fn(); err != nil {
+				gerr = err
+			}
 		}
-	}
 
+		// tracer 是进程级共享资源:只有最后一个 Service 停止时才关闭,
+		// 避免单个服务 Stop 掉全进程的链路追踪(历史行为)。
+		if dropServiceRef() {
+			tracer.CloseTracer()
+		}
+	})
 	return gerr
 }

@@ -1,6 +1,7 @@
 package client
 
 import (
+	"context"
 	"fmt"
 	"sync"
 
@@ -10,8 +11,12 @@ import (
 	"github.com/xxjwxc/public/mylog"
 	"github.com/xxjwxc/public/tools"
 
+	// go-grpc-middleware v1.3.0 (2021) 的 opentracing 拦截器与 grpc v1.79.1 混用
+	// 属已知兼容风险:本次不升级依赖主版本,仅在此标注,详见 CI 说明。
 	grpc_opentracing "github.com/grpc-ecosystem/go-grpc-middleware/tracing/opentracing"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/resolver"
 )
 
@@ -24,43 +29,53 @@ type namingResolver struct {
 }
 
 func (c *namingResolver) Init(opts ...Option) error {
+	c.Lock()
+	defer c.Unlock()
+
+	// 在锁内读取旧值:历史实现在加锁前裸读 c.opts,与并发 Init/Options 有数据竞争。
 	size := c.opts.PoolSize
 	ttl := c.opts.PoolTTL
 	timeOut := c.opts.TimeOut
-
-	c.Lock()
-	defer c.Unlock()
 
 	for _, opt := range opts {
 		opt(&c.opts)
 	}
 
+	// 与 newOptions 一致的默认值兜底。历史实现里 newIPAddrClient 的 opts 是零值,
+	// Init 会把 pool.size/ttl/timeOut 写成 0;ttl 截断成 0 秒后 getConn 里
+	// "now-created > ttl" 恒成立,直连模式每次 RPC 都会重新 Dial。
+	if c.opts.PoolSize <= 0 {
+		c.opts.PoolSize = DefaultPoolSize
+	}
+	if c.opts.PoolTTL <= 0 {
+		c.opts.PoolTTL = DefaultPoolTTL
+	}
 	if c.opts.TimeOut <= 0 {
 		c.opts.TimeOut = DefaultPoolTimeout
 	}
 
-	// update pool configuration if the options changed
 	if size != c.opts.PoolSize || ttl != c.opts.PoolTTL || timeOut != c.opts.TimeOut {
 		c.pool.Lock()
 		c.pool.size = c.opts.PoolSize
-		c.pool.ttl = int64(c.opts.PoolTTL.Seconds())
+		sec := int64(c.opts.PoolTTL.Seconds())
+		if sec < 1 { // ttl 以秒存储,写入前保证至少 1s
+			sec = 1
+		}
+		c.pool.ttl = sec
 		c.pool.timeOut = c.opts.TimeOut
 		c.pool.Unlock()
 	}
 
-	if c.opts.Registry != nil {
-		// init registry parms
-		//
+	if c.opts.Registry != nil && c.opts.Registry.RegNaming != nil {
 		// 这里**不能**传 registry.WithServiceName。RegNaming 是进程内共享的单例,
 		// 它的 ServiceName 决定注册端往哪个服务名下写、Deregister 时删哪个 key。
 		// 客户端要发现的服务只体现在 Resolve(target) 的入参上。
-		// 历史实现把 c.opts.serviceName 写进去,导致后登记的下游服务会覆盖注册端的服务名:
-		// 本服务被注册到别人的服务名下,或者停机时删掉了别人的 key。
 		c.opts.Registry.RegNaming.Init(registry.WithTimeout(c.opts.RegisterTTL))
 	}
 
 	return nil
 }
+
 func (c *namingResolver) Options() Options {
 	c.RLock()
 	opts := c.opts
@@ -69,89 +84,114 @@ func (c *namingResolver) Options() Options {
 }
 
 func (c *namingResolver) String() string {
-	return c.opts.name
+	c.RLock()
+	name := c.opts.name
+	c.RUnlock()
+	return name
 }
 
-// initResolver 注册平衡器
-func (c *namingResolver) initResolver() {
-	if c.opts.Registry != nil {
-		resolver.Register(&resolverBuilder{scheme: c.opts.Scheme, regNaming: c.opts.Registry.RegNaming})
+// initResolver 注册平衡器。使用局部 opts 快照,避免与 Init 并发写 c.opts 竞争。
+func (c *namingResolver) initResolver(opts Options) {
+	if opts.Registry != nil && opts.Registry.RegNaming != nil {
+		resolver.Register(&resolverBuilder{scheme: opts.Scheme, regNaming: opts.Registry.RegNaming})
 	}
 }
 
-// Next connon
+// Next 获取一个连接。旧签名保持不变,以 Options.Context 为父 ctx 包装 NextWithContext。
 func (c *namingResolver) Next() (*poolConn, error) {
-	c.once.Do(c.initResolver)
+	ctx := c.Options().Context
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return c.NextWithContext(ctx)
+}
 
-	opt := []grpc.DialOption{
-		grpc.WithInsecure(),
+// NextWithContext 获取一个连接,并把调用方的 ctx 透传到建连过程(dial)。
+// 所有对 c.opts 的读取都在 RLock 下拷贝成局部值后再使用,避免与 Init() 并发写竞争。
+func (c *namingResolver) NextWithContext(ctx context.Context) (*poolConn, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	// RLock 拷贝一份 opts(与 Options() 一致),后续统一使用局部值。
+	c.RLock()
+	opts := c.opts
+	c.RUnlock()
+	// serviceIps 是 slice,结构体值拷贝只复制了 slice header;深拷贝一份,
+	// 避免与 Init() 并发替换底层数组时读到被改写的数据或越界。
+	if len(opts.serviceIps) > 0 {
+		opts.serviceIps = append([]string(nil), opts.serviceIps...)
+	}
+
+	c.once.Do(func() { c.initResolver(opts) })
+
+	dialOpts := []grpc.DialOption{
+		// 保留 WithBlock:连接池 getConn 依赖 DialContext 返回时连接已就绪
+		// (对 Connecting 状态的连接是跳过而非复用)。去掉会让首次并发建连期间
+		// 重复 Dial;该改造需同时调整连接池状态机,本次不做。
 		grpc.WithBlock(),
 	}
-	// 开始注册
-	if c.opts.Registry != nil {
-		opt = append(opt, grpc.WithDefaultServiceConfig(`{"loadBalancingPolicy":"round_robin"}`)) //grpc.WithBalancer(grpc.RoundRobin(c.opts.Registry.RegNaming))
+	var regNaming registry.RegNaming
+	if opts.Registry != nil {
+		regNaming = opts.Registry.RegNaming
 	}
+	if regNaming != nil {
+		dialOpts = append(dialOpts, grpc.WithDefaultServiceConfig(`{"loadBalancingPolicy":"round_robin"}`))
+		// TLS 入口来自 registry.Options.WithTLS;默认 nil 时保持明文以兼容现有部署。
+		if tlsCfg := regNaming.Options().TLSConfig; tlsCfg != nil {
+			dialOpts = append(dialOpts, grpc.WithTransportCredentials(credentials.NewTLS(tlsCfg)))
+		} else {
+			dialOpts = append(dialOpts, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		}
+	} else {
+		dialOpts = append(dialOpts, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	}
+
 	trace := tracer.GetTracer()
 	if trace != nil {
-		opt = append(opt, grpc.WithUnaryInterceptor(grpc_opentracing.UnaryClientInterceptor(
+		dialOpts = append(dialOpts, grpc.WithUnaryInterceptor(grpc_opentracing.UnaryClientInterceptor(
 			grpc_opentracing.WithTracer(trace),
 		)))
 	}
+
 	var addr string
-	if len(c.opts.serviceName) > 0 {
-		addr = fmt.Sprintf("%v:///%v", c.opts.Scheme, c.opts.serviceName)
-	} else if len(c.opts.serviceIps) > 0 {
-		addr = c.opts.serviceIps[tools.GetRandInt(0, len(c.opts.serviceIps))] // 随机
+	if len(opts.serviceName) > 0 {
+		addr = fmt.Sprintf("%v:///%v", opts.Scheme, opts.serviceName)
+	} else if n := len(opts.serviceIps); n > 0 {
+		idx := tools.GetRandInt(0, n)
+		if idx < 0 {
+			idx = 0
+		}
+		if idx >= n { // 防御 GetRandInt 返回上界导致 slice 越界
+			idx = n - 1
+		}
+		addr = opts.serviceIps[idx]
 	}
 
-	cc, err := c.pool.getConn(addr, opt...)
+	cc, err := c.pool.getConnContext(ctx, addr, dialOpts...)
 	if err != nil {
 		mylog.Error(err)
 		return nil, err
 	}
-
-	// //建立连接
-	// conn, err := grpc.Dial(c.opts.serviceName, grpc.WithInsecure(), grpc.WithBalancer(b), grpc.WithBlock())
-	// if err != nil {
-	// 	return conn, err
-	// }
-
-	// cli := grpc_health_v1.NewHealthClient(conn)
-	// go func() {
-	// 	for {
-	// 		resp, err := cli.Check(context.TODO(), &grpc_health_v1.HealthCheckRequest{})
-	// 		if err != nil {
-	// 			fmt.Printf("健康检查报错: %+v\n", err)
-	// 			// os.Exit(1)
-	// 		}
-	// 		fmt.Printf("服务健康状态: %+v\n", resp)
-	// 		time.Sleep(time.Second * 5)
-	// 	}
-	// }()
-
-	return cc, err
+	return cc, nil
 }
 
-// func Copy() *Client {
-
-// }
-
-func (c *namingResolver) poolMaxStreams() int {
-	if c.opts.Context == nil {
+func (c *namingResolver) poolMaxStreams(opts Options) int {
+	if opts.Context == nil {
 		return DefaultPoolMaxStreams
 	}
-	v := c.opts.Context.Value(poolMaxStreams{})
+	v := opts.Context.Value(poolMaxStreams{})
 	if v == nil {
 		return DefaultPoolMaxStreams
 	}
 	return v.(int)
 }
 
-func (c *namingResolver) poolMaxIdle() int {
-	if c.opts.Context == nil {
+func (c *namingResolver) poolMaxIdle(opts Options) int {
+	if opts.Context == nil {
 		return DefaultPoolMaxIdle
 	}
-	v := c.opts.Context.Value(poolMaxIdle{})
+	v := opts.Context.Value(poolMaxIdle{})
 	if v == nil {
 		return DefaultPoolMaxIdle
 	}

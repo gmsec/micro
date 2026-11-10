@@ -165,6 +165,10 @@ type client struct {
 	ipv4MulticastConn *net.UDPConn
 	ipv6MulticastConn *net.UDPConn
 
+	// 本实例发送组播查询的目标地址(端口下沉为实例字段)。
+	ipv4Addr *net.UDPAddr
+	ipv6Addr *net.UDPAddr
+
 	closed    bool
 	closedCh  chan struct{} // TODO(reddaly): This doesn't appear to be used.
 	closeLock sync.Mutex
@@ -173,43 +177,55 @@ type client struct {
 // NewClient creates a new mdns Client that can be used to query
 // for records
 func newClient() (*client, error) {
+	// 端口/组播目标地址都是本实例的局部副本,不读写包级 *net.UDPAddr。
+	wildcard4, wildcard6, dst4, dst6 := mdnsAddrs(0)
+
 	// TODO(reddaly): At least attempt to bind to the port required in the spec.
 	// Create a IPv4 listener
 	uconn4, err4 := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4zero, Port: 0})
 	uconn6, err6 := net.ListenUDP("udp6", &net.UDPAddr{IP: net.IPv6zero, Port: 0})
+	mconn4, merr4 := net.ListenUDP("udp4", wildcard4)
+	mconn6, merr6 := net.ListenUDP("udp6", wildcard6)
+
+	// cleanup 覆盖所有错误分支:任何一个 socket 创建成功后又失败,
+	// 都要把已打开的 fd 释放掉(mdns.Query 每次都会 newClient,watcher
+	// 每秒轮询,泄漏会稳定累积)。成功返回前把 ok 置 true 取消清理。
+	cleanup := func() {
+		for _, c := range []*net.UDPConn{uconn4, uconn6, mconn4, mconn6} {
+			if c != nil {
+				c.Close()
+			}
+		}
+	}
+	ok := false
+	defer func() {
+		if !ok {
+			cleanup()
+		}
+	}()
+
 	if err4 != nil && err6 != nil {
 		log.Printf("[ERR] mdns: Failed to bind to udp port: %v %v", err4, err6)
 	}
-
 	if uconn4 == nil && uconn6 == nil {
 		return nil, fmt.Errorf("failed to bind to any unicast udp port")
 	}
-
 	if uconn4 == nil {
 		uconn4 = &net.UDPConn{}
 	}
-
 	if uconn6 == nil {
 		uconn6 = &net.UDPConn{}
 	}
 
-	mconn4, err4 := net.ListenUDP("udp4", mdnsWildcardAddrIPv4)
-	mconn6, err6 := net.ListenUDP("udp6", mdnsWildcardAddrIPv6)
-	if err4 != nil && err6 != nil {
-		log.Printf("[ERR] mdns: Failed to bind to udp port: %v %v", err4, err6)
+	if merr4 != nil && merr6 != nil {
+		log.Printf("[ERR] mdns: Failed to bind to udp port: %v %v", merr4, merr6)
 	}
-
 	if mconn4 == nil && mconn6 == nil {
-		// 历史实现直接返回,已打开的单播 socket 会泄漏
-		uconn4.Close()
-		uconn6.Close()
 		return nil, fmt.Errorf("failed to bind to any multicast udp port")
 	}
-
 	if mconn4 == nil {
 		mconn4 = &net.UDPConn{}
 	}
-
 	if mconn6 == nil {
 		mconn6 = &net.UDPConn{}
 	}
@@ -236,11 +252,6 @@ func newClient() (*client, error) {
 	}
 
 	if len(ifaces) == errCount1 && len(ifaces) == errCount2 {
-		// 所有网卡都加入组播失败:释放上面已打开的所有 socket
-		uconn4.Close()
-		uconn6.Close()
-		mconn4.Close()
-		mconn6.Close()
 		return nil, fmt.Errorf("failed to join multicast group on all interfaces")
 	}
 
@@ -249,8 +260,11 @@ func newClient() (*client, error) {
 		ipv6MulticastConn: mconn6,
 		ipv4UnicastConn:   uconn4,
 		ipv6UnicastConn:   uconn6,
+		ipv4Addr:          dst4,
+		ipv6Addr:          dst6,
 		closedCh:          make(chan struct{}),
 	}
+	ok = true
 	return c, nil
 }
 
@@ -383,10 +397,10 @@ func (c *client) sendQuery(q *dns.Msg) error {
 		return err
 	}
 	if c.ipv4UnicastConn != nil {
-		c.ipv4UnicastConn.WriteToUDP(buf, ipv4Addr)
+		c.ipv4UnicastConn.WriteToUDP(buf, c.ipv4Addr)
 	}
 	if c.ipv6UnicastConn != nil {
-		c.ipv6UnicastConn.WriteToUDP(buf, ipv6Addr)
+		c.ipv6UnicastConn.WriteToUDP(buf, c.ipv6Addr)
 	}
 	return nil
 }

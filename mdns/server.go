@@ -38,6 +38,21 @@ var (
 	}
 )
 
+// mdnsAddrs 依据端口生成一组彼此独立的 UDPAddr 副本。
+// 历史上 NewServer 直接改写包级 mdnsWildcardAddr*/ipv4Addr/ipv6Addr 的 Port,
+// 既造成数据竞争,也让不同服务实例的组播端口互相串台。现在这些包级变量
+// 只作为只读模板,实际地址由 Server / client 实例各自持有。
+func mdnsAddrs(port int) (wildcard4, wildcard6, dst4, dst6 *net.UDPAddr) {
+	if port <= 0 {
+		port = mdnsWildcardAddrIPv4.Port
+	}
+	wildcard4 = &net.UDPAddr{IP: net.ParseIP("224.0.0.0"), Port: port}
+	wildcard6 = &net.UDPAddr{IP: net.ParseIP("ff02::"), Port: port}
+	dst4 = &net.UDPAddr{IP: mdnsGroupIPv4, Port: port}
+	dst6 = &net.UDPAddr{IP: mdnsGroupIPv6, Port: port}
+	return
+}
+
 // Config is used to configure the mDNS server
 type Config struct {
 	// Zone must be provided to support responding to queries
@@ -60,6 +75,11 @@ type Server struct {
 	ipv4List *net.UDPConn
 	ipv6List *net.UDPConn
 
+	// ipv4Addr/ipv6Addr 是本实例发送组播的目标地址(端口下沉为实例字段),
+	// 不再共享包级 ipv4Addr/ipv6Addr,避免端口串台。
+	ipv4Addr *net.UDPAddr
+	ipv6Addr *net.UDPAddr
+
 	shutdown     bool
 	shutdownCh   chan struct{}
 	shutdownLock sync.Mutex
@@ -68,17 +88,31 @@ type Server struct {
 
 // NewServer is used to create a new mDNS server from a config
 func NewServer(config *Config) (*Server, error) {
-	if config.Port != 0 {
-		mdnsWildcardAddrIPv4.Port = config.Port
-		mdnsWildcardAddrIPv6.Port = config.Port
-		ipv4Addr.Port = config.Port
-		ipv6Addr.Port = config.Port
-	}
+	// 端口只作用于本实例:用局部地址副本,不改写包级 *net.UDPAddr。
+	wildcard4, wildcard6, dst4, dst6 := mdnsAddrs(config.Port)
 
 	// Create the listeners
 	// Create wildcard connections (because :5353 can be already taken by other apps)
-	ipv4List, _ := net.ListenUDP("udp4", mdnsWildcardAddrIPv4)
-	ipv6List, _ := net.ListenUDP("udp6", mdnsWildcardAddrIPv6)
+	ipv4List, _ := net.ListenUDP("udp4", wildcard4)
+	ipv6List, _ := net.ListenUDP("udp6", wildcard6)
+
+	// cleanup 在任意失败路径上释放已经创建成功的 UDP 连接。
+	// 成功返回前把 ok 置 true,defer 不再执行清理。
+	cleanup := func() {
+		if ipv4List != nil {
+			ipv4List.Close()
+		}
+		if ipv6List != nil {
+			ipv6List.Close()
+		}
+	}
+	ok := false
+	defer func() {
+		if !ok {
+			cleanup()
+		}
+	}()
+
 	if ipv4List == nil && ipv6List == nil {
 		return nil, fmt.Errorf("[ERR] mdns: Failed to bind to any udp port!")
 	}
@@ -126,6 +160,8 @@ func NewServer(config *Config) (*Server, error) {
 		config:     config,
 		ipv4List:   ipv4List,
 		ipv6List:   ipv6List,
+		ipv4Addr:   dst4,
+		ipv6Addr:   dst6,
 		shutdownCh: make(chan struct{}),
 	}
 
@@ -135,6 +171,7 @@ func NewServer(config *Config) (*Server, error) {
 	s.wg.Add(1)
 	go s.probe()
 
+	ok = true
 	return s, nil
 }
 
@@ -149,7 +186,10 @@ func (s *Server) Shutdown() error {
 
 	s.shutdown = true
 	close(s.shutdownCh)
-	s.unregister()
+	// goodbye 组播发送失败不能吞掉:记录下来,否则 Deregister 是否生效无从判断。
+	if err := s.unregister(); err != nil {
+		log.Printf("[ERR] mdns: failed to send goodbye on shutdown: %v", err)
+	}
 
 	if s.ipv4List != nil {
 		s.ipv4List.Close()
@@ -331,8 +371,8 @@ func (s *Server) handleQuestion(q dns.Question) (multicastRecs, unicastRecs []dn
 func (s *Server) probe() {
 	defer s.wg.Done()
 
-	sd, ok := s.config.Zone.(*MDNSService)
-	if !ok {
+	sd := s.zoneMDNSService()
+	if sd == nil {
 		return
 	}
 
@@ -415,10 +455,10 @@ func (s *Server) SendMulticast(msg *dns.Msg) error {
 		return err
 	}
 	if s.ipv4List != nil {
-		s.ipv4List.WriteToUDP(buf, ipv4Addr)
+		s.ipv4List.WriteToUDP(buf, s.ipv4Addr)
 	}
 	if s.ipv6List != nil {
-		s.ipv6List.WriteToUDP(buf, ipv6Addr)
+		s.ipv6List.WriteToUDP(buf, s.ipv6Addr)
 	}
 	return nil
 }
@@ -443,13 +483,31 @@ func (s *Server) sendResponse(resp *dns.Msg, from net.Addr) error {
 	}
 }
 
+// zoneMDNSService 取出 Config.Zone 背后的 *MDNSService。
+// 框架注册时传的是 &mdns.Config{Zone: &mdns.DNSSDService{MDNSService: s}},
+// 而历史实现只断言 *MDNSService,导致 probe/announce 与 goodbye 全部空转。
+func (s *Server) zoneMDNSService() *MDNSService {
+	switch z := s.config.Zone.(type) {
+	case *MDNSService:
+		return z
+	case *DNSSDService:
+		if z != nil {
+			return z.MDNSService
+		}
+		return nil
+	default:
+		return nil
+	}
+}
+
 func (s *Server) unregister() error {
-	sd, ok := s.config.Zone.(*MDNSService)
-	if !ok {
+	sd := s.zoneMDNSService()
+	if sd == nil {
 		return nil
 	}
 
-	sd.TTL = 0
+	// 用 SetTTL 而非裸写 sd.TTL：查询 goroutine 会并发在 Records 里读 TTL。
+	sd.SetTTL(0)
 	name := fmt.Sprintf("%s.%s.%s.", sd.Instance, trimDot(sd.Service), trimDot(sd.Domain))
 
 	q := new(dns.Msg)

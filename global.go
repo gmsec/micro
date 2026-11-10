@@ -16,7 +16,29 @@ var (
 	_mp        = make(map[string]Service)
 	_IpAddrMp  = make(map[string]client.Client)
 	_RegNaming registry.RegNaming
+
+	// serviceRefMu / serviceRefs 统计存活的 Service 实例,
+	// 只有最后一个 Service 停止时才关闭全进程共享的 tracer。
+	serviceRefMu sync.Mutex
+	serviceRefs  int
 )
+
+// addServiceRef 每创建一个 Service 就增加一次引用。
+func addServiceRef() {
+	serviceRefMu.Lock()
+	serviceRefs++
+	serviceRefMu.Unlock()
+}
+
+// dropServiceRef 减少引用,返回是否已没有存活的 Service。
+func dropServiceRef() bool {
+	serviceRefMu.Lock()
+	defer serviceRefMu.Unlock()
+	if serviceRefs > 0 {
+		serviceRefs--
+	}
+	return serviceRefs == 0
+}
 
 // GetService get service by name.
 // 按服务名精确获取已初始化的 Service,找不到返回 nil。

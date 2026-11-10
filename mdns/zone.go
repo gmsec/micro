@@ -5,6 +5,7 @@ import (
 	"net"
 	"os"
 	"strings"
+	"sync"
 
 	"github.com/miekg/dns"
 )
@@ -30,7 +31,8 @@ type MDNSService struct {
 	Port         int      // Service Port
 	IPs          []net.IP // IP addresses for the service's host
 	TXT          []string // Service TXT records
-	TTL          uint32
+	TTL          uint32   // 初始/默认 TTL；运行期读写请走 SetTTL/getTTL
+	mu           sync.RWMutex
 	serviceAddr  string // Fully qualified service address
 	instanceAddr string // Fully qualified instance address
 	enumAddr     string // _services._dns-sd._udp.<domain>
@@ -134,6 +136,21 @@ func trimDot(s string) string {
 	return strings.Trim(s, ".")
 }
 
+// SetTTL 运行期修改 TTL。unregister 会把它置 0 以发布 goodbye 记录，
+// 而查询 goroutine 可能同时在 Records 里读它，必须加锁保护。
+func (m *MDNSService) SetTTL(v uint32) {
+	m.mu.Lock()
+	m.TTL = v
+	m.mu.Unlock()
+}
+
+// getTTL 读取当前 TTL；构造期之后所有内部读取都走这里。
+func (m *MDNSService) getTTL() uint32 {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.TTL
+}
+
 // Records returns DNS records in response to a DNS question.
 func (m *MDNSService) Records(q dns.Question) []dns.RR {
 	switch q.Name {
@@ -163,7 +180,7 @@ func (m *MDNSService) serviceEnum(q dns.Question) []dns.RR {
 				Name:   q.Name,
 				Rrtype: dns.TypePTR,
 				Class:  dns.ClassINET,
-				Ttl:    m.TTL,
+				Ttl:    m.getTTL(),
 			},
 			Ptr: m.serviceAddr,
 		}
@@ -185,7 +202,7 @@ func (m *MDNSService) serviceRecords(q dns.Question) []dns.RR {
 				Name:   q.Name,
 				Rrtype: dns.TypePTR,
 				Class:  dns.ClassINET,
-				Ttl:    m.TTL,
+				Ttl:    m.getTTL(),
 			},
 			Ptr: m.instanceAddr,
 		}
@@ -230,7 +247,7 @@ func (m *MDNSService) instanceRecords(q dns.Question) []dns.RR {
 						Name:   m.HostName,
 						Rrtype: dns.TypeA,
 						Class:  dns.ClassINET,
-						Ttl:    m.TTL,
+						Ttl:    m.getTTL(),
 					},
 					A: ip4,
 				})
@@ -255,7 +272,7 @@ func (m *MDNSService) instanceRecords(q dns.Question) []dns.RR {
 						Name:   m.HostName,
 						Rrtype: dns.TypeAAAA,
 						Class:  dns.ClassINET,
-						Ttl:    m.TTL,
+						Ttl:    m.getTTL(),
 					},
 					AAAA: ip16,
 				})
@@ -270,7 +287,7 @@ func (m *MDNSService) instanceRecords(q dns.Question) []dns.RR {
 				Name:   q.Name,
 				Rrtype: dns.TypeSRV,
 				Class:  dns.ClassINET,
-				Ttl:    m.TTL,
+				Ttl:    m.getTTL(),
 			},
 			Priority: 10,
 			Weight:   1,
@@ -298,7 +315,7 @@ func (m *MDNSService) instanceRecords(q dns.Question) []dns.RR {
 				Name:   q.Name,
 				Rrtype: dns.TypeTXT,
 				Class:  dns.ClassINET,
-				Ttl:    m.TTL,
+				Ttl:    m.getTTL(),
 			},
 			Txt: m.TXT,
 		}

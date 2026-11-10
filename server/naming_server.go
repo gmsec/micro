@@ -33,6 +33,8 @@ type namingResolver struct {
 	started bool
 	// health 健康检查服务,用于停机时先把状态置为 NOT_SERVING
 	health *health.Server
+	// serveErrCh 回传 gs.Serve 的错误(启动期错误由 Start 直接返回)
+	serveErrCh chan error
 }
 
 // NewNamingResolver new one
@@ -66,15 +68,34 @@ func (s *namingResolver) Init(opts ...Option) error {
 // NewHandler(interface{}, ...HandlerOption) Handler
 // NewSubscriber(string, interface{}, ...SubscriberOption) Subscriber
 // Subscribe(Subscriber) error
+// readyListener 在 gRPC Server 首次调用 Accept 时关闭 ready,
+// 让 Start() 能等到"监听真正就绪"再返回。
+type readyListener struct {
+	net.Listener
+	once  sync.Once
+	ready chan struct{}
+}
+
+func (l *readyListener) Accept() (net.Conn, error) {
+	l.once.Do(func() { close(l.ready) })
+	return l.Listener.Accept()
+}
+
 func (s *namingResolver) Start() error {
 	gs := s.GetServer()
 	s.Lock()
 	defer s.Unlock()
-	lis := s.opts.getListener()
+
+	lis, err := s.opts.getListener()
+	if err != nil {
+		return err
+	}
 
 	if s.started {
 		return nil
 	}
+
+	addr := s.opts.Address
 
 	if s.opts.Registry == nil { // default naming register
 		s.opts.Registry = &registry.Registry{
@@ -89,12 +110,12 @@ func (s *namingResolver) Start() error {
 		registry.WithTimeout(s.opts.RegisterTTL),
 	)
 
-	// 开始注册
+	// 注册失败不能"打条日志继续启动":那样进程活着但没注册,
+	// 调用方永远发现不了本服务,而 Start() 却恒返回 nil。
 	reg := s.opts.Registry.RegNaming
 	if reg != nil {
 		if err := reg.Register(s.opts.Address, nil); err != nil {
-			mylog.ErrorString("gRPC Server register error:")
-			mylog.Error(err)
+			return fmt.Errorf("grpc server register: %w", err)
 		}
 	}
 
@@ -104,14 +125,30 @@ func (s *namingResolver) Start() error {
 	hsrv.SetServingStatus("", grpc_health_v1.HealthCheckResponse_SERVING)
 	s.health = hsrv
 
-	// micro: go ts.Accept(s.accept)
+	// Serve 的错误回传到 errCh;历史实现把错误吞在 goroutine 里,
+	// Start() 恒返回 nil,出现"进程活着但没在监听"。
+	errCh := make(chan error, 1)
+	s.serveErrCh = errCh
+
+	rl := &readyListener{Listener: lis, ready: make(chan struct{})}
 	go func() {
-		mylog.Info(fmt.Sprintf("grpc server in: %v", s.opts.Address))
-		if err := gs.Serve(lis); err != nil {
-			mylog.ErrorString("gRPC Server start error:")
+		mylog.Info(fmt.Sprintf("grpc server in: %v", addr))
+		if err := gs.Serve(rl); err != nil {
+			select {
+			case errCh <- err:
+			default:
+			}
+			mylog.ErrorString("gRPC Server serve error:")
 			mylog.Error(err)
 		}
 	}()
+
+	// 等待首次 Accept(监听真正就绪)或 Serve 立即失败,再返回。
+	select {
+	case <-rl.ready:
+	case err := <-errCh:
+		return err
+	}
 
 	s.started = true
 
@@ -126,6 +163,7 @@ func (s *namingResolver) Stop() error {
 	hsrv := s.health
 	delay := s.opts.DeregisterDelay
 	stopTimeout := s.opts.StopTimeout
+	serveErrCh := s.serveErrCh
 	var reg registry.RegNaming
 	if s.opts.Registry != nil {
 		reg = s.opts.Registry.RegNaming
@@ -144,7 +182,8 @@ func (s *namingResolver) Stop() error {
 		}
 	}
 
-	tracer.CloseTracer() // 关闭链路追踪
+	// tracer 是进程级共享资源,不再在单个服务 Stop 时关闭:
+	// 改为由 micro.Service 在最后一个 Service 停止时统一关闭。
 
 	// 3. 留出摘流时间后再停止 gRPC 监听(时长可配置,默认 1s)
 	if delay > 0 {
@@ -155,7 +194,17 @@ func (s *namingResolver) Stop() error {
 	s.Lock()
 	s.started = false
 	s.health = nil
+	s.serveErrCh = nil
 	s.Unlock()
+
+	// 把 Serve 运行期错误透传给调用方(micro.Run/Stop 能返回的 error)。
+	if serveErrCh != nil {
+		select {
+		case err := <-serveErrCh:
+			return err
+		default:
+		}
+	}
 
 	return nil
 }
@@ -214,6 +263,20 @@ func (s *namingResolver) GetServer() *grpc.Server {
 
 // GetListener listener
 func (s *namingResolver) GetListener() net.Listener {
+	s.Lock()
+	defer s.Unlock()
+	lis, err := s.opts.getListener()
+	if err != nil {
+		// 保持 Server 接口的 net.Listener 返回签名,不再用 Fatal 结束进程;
+		// 需要错误信息的调用方请用 GetListenerWithError。
+		mylog.Error(err)
+		return nil
+	}
+	return lis
+}
+
+// GetListenerWithError 与 GetListener 相同,但把监听失败的错误返回给调用方。
+func (s *namingResolver) GetListenerWithError() (net.Listener, error) {
 	s.Lock()
 	defer s.Unlock()
 	return s.opts.getListener()

@@ -82,7 +82,17 @@ func newPool(size int, ttl time.Duration, idle int, ms int, timeOut time.Duratio
 	}
 }
 
+// getConn 保留旧签名,以 Background 为父 ctx 调用 getConnContext。
 func (p *pool) getConn(addr string, opts ...grpc.DialOption) (*poolConn, error) {
+	return p.getConnContext(context.Background(), addr, opts...)
+}
+
+// getConnContext 与 getConn 相同,但以调用方的 ctx 为父上下文:
+// dial 超时由 context.WithTimeout(ctx, timeOut) 控制,调用方取消/超时能立刻打断建连。
+func (p *pool) getConnContext(ctx context.Context, addr string, opts ...grpc.DialOption) (*poolConn, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	now := time.Now().Unix()
 	p.Lock()
 	sp, ok := p.conns[addr]
@@ -163,9 +173,9 @@ func (p *pool) getConn(addr string, opts ...grpc.DialOption) (*poolConn, error) 
 	if timeOut <= 0 {
 		timeOut = DefaultPoolTimeout
 	}
-	ctx, cel := context.WithTimeout(context.Background(), timeOut)
+	dialCtx, cel := context.WithTimeout(ctx, timeOut)
 	defer cel()
-	cc, err := grpc.DialContext(ctx, addr, opts...)
+	cc, err := grpc.DialContext(dialCtx, addr, opts...)
 	if err != nil {
 		//if err == context.DeadlineExceeded { // 超时
 		return nil, fmt.Errorf("[%v]:%v", addr, err.Error())

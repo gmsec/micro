@@ -3,10 +3,12 @@ package registry
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net"
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/gmsec/micro/naming"
@@ -21,16 +23,22 @@ var (
 	// use a .micro domain rather than .local
 	mdnsDomain = "gmsec"
 
-	// mdnsGraceWindow 是"本轮查不到就判删"的容忍窗口。
+	// mdnsGraceWindowNs 是"本轮查不到就判删"的容忍窗口(纳秒)。
 	// mDNS 走组播,一次查询漏掉应答很常见,单次查不到就删会误伤健康节点;
 	// 连续一个窗口都没出现,才认为对端已经下线。
-	mdnsGraceWindow = 5 * time.Second
-
-	// mdnsPollInterval 是两次查询之间的最小间隔。
-	// mdns.Query 是"发查询等应答",返回得很快,不节流的话上层会在一个紧凑循环里
-	// 反复扫描组播网段,白吃一个核。
-	mdnsPollInterval = time.Second
+	// 用 atomic 而非裸 time.Duration:后台 watcher goroutine 会并发读,
+	// 测试会在运行时调整该值,裸读写会触发 data race。
+	mdnsGraceWindowNs atomic.Int64
+	// mdnsPollIntervalNs 是两次查询之间的最小间隔(纳秒),同上用 atomic。
+	// mdns.Query 是"发查询等应答",返回得很快,不节流的话上层会在一个紧凑
+	// 循环里反复扫描组播网段,白吃一个核。
+	mdnsPollIntervalNs atomic.Int64
 )
+
+func init() {
+	mdnsGraceWindowNs.Store(int64(5 * time.Second))
+	mdnsPollIntervalNs.Store(int64(time.Second))
+}
 
 // DNSNamingRegister dns default register
 type DNSNamingRegister struct {
@@ -96,29 +104,123 @@ func (r *DNSNamingRegister) String() string {
 	return r.opts.ServiceName
 }
 
+// resolveAdvertiseAddr 计算对外公告的可达 "IP:Port"。
+//
+// 监听地址常常是 ":0"、"0.0.0.0:port"、"[::]:port" 这类通配地址,
+// 直接写进 TXT 会让客户端 dial 到不可达地址(net.ParseIP("::") 非 nil,
+// 但会生成一条不可达 AAAA)。策略:
+//   - 显式 WithAdvertise:解析并严格校验,必须是具体 IP(非 unspecified);
+//   - 未指定且监听在通配地址:枚举第一块非 loopback 网卡 IP;
+//   - 无法解析出具体 IP 时返回明确 error,而不是默默注册一条坏记录。
+func resolveAdvertiseAddr(listenAddr, advertise string) (string, net.IP, int, error) {
+	src := listenAddr
+	if advertise != "" {
+		src = advertise
+	}
+
+	host, portStr, err := net.SplitHostPort(src)
+	if err != nil {
+		return "", nil, 0, fmt.Errorf("registry: invalid address %q: %w", src, err)
+	}
+	port, err := strconv.Atoi(portStr)
+	if err != nil {
+		return "", nil, 0, fmt.Errorf("registry: invalid port in %q: %w", src, err)
+	}
+
+	ip := net.ParseIP(host)
+	if advertise != "" {
+		if ip == nil {
+			return "", nil, 0, fmt.Errorf("registry: WithAdvertise %q host is not an IP literal", advertise)
+		}
+		if ip.IsUnspecified() {
+			return "", nil, 0, fmt.Errorf("registry: WithAdvertise %q is unspecified", advertise)
+		}
+	} else {
+		switch {
+		case len(host) == 0 || (ip != nil && ip.IsUnspecified()):
+			// 通配监听地址:挑一块非 loopback 网卡的可达 IP。
+			ip = firstNonLoopbackIP()
+			if ip == nil {
+				return "", nil, 0, fmt.Errorf("registry: no non-loopback interface IP for %q; use registry.WithAdvertise", listenAddr)
+			}
+		case ip == nil:
+			return "", nil, 0, fmt.Errorf("registry: %q host %q is not an IP literal; use registry.WithAdvertise", listenAddr, host)
+		}
+	}
+	return net.JoinHostPort(ip.String(), portStr), ip, port, nil
+}
+
+// firstNonLoopbackIP 返回第一块非 loopback 网卡上的可达 IP(优先 IPv4)。
+// 只有 loopback 网卡的机器(常见于容器)回退到 127.0.0.1,
+// 保证默认监听地址 ":0" 不会演变成不可达的 "[::]:port"。
+func firstNonLoopbackIP() net.IP {
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return nil
+	}
+	var fallback, loopback net.IP
+	for _, iface := range ifaces {
+		addrs, err := iface.Addrs()
+		if err != nil {
+			continue
+		}
+		for _, a := range addrs {
+			var ip net.IP
+			switch v := a.(type) {
+			case *net.IPNet:
+				ip = v.IP
+			case *net.IPAddr:
+				ip = v.IP
+			}
+			if ip == nil || ip.IsUnspecified() {
+				continue
+			}
+			if ip.IsLoopback() {
+				if loopback == nil {
+					loopback = ip
+				}
+				continue
+			}
+			if ip4 := ip.To4(); ip4 != nil {
+				return ip4
+			}
+			if fallback == nil && !ip.IsLinkLocalUnicast() {
+				fallback = ip
+			}
+		}
+	}
+	if fallback != nil {
+		return fallback
+	}
+	if loopback != nil {
+		return loopback
+	}
+	return net.ParseIP("127.0.0.1")
+}
+
 // Register register & add new node
 func (r *DNSNamingRegister) Register(address string, Metadata interface{}) error {
 	r.reg.Lock()
 	defer r.reg.Unlock()
 
-	host, pt, err := net.SplitHostPort(address)
-	if err != nil {
-		return err
-	}
-	port, err := strconv.Atoi(pt)
+	r.Lock()
+	advertise := r.opts.Advertise
+	r.Unlock()
+
+	advertiseAddr, ip, port, err := resolveAdvertiseAddr(address, advertise)
 	if err != nil {
 		return err
 	}
 
-	// to add someone service
+	// TXT 里必须写可达的 IP:Port,客户端会直接 dial 这个地址。
 	txt := naming.Update{
 		Op:       naming.Add,
-		Addr:     address,
+		Addr:     advertiseAddr,
 		Metadata: port,
 	}
 
 	r.Lock()
-	r.opts.Addrs = []string{address}
+	r.opts.Addrs = []string{advertiseAddr}
 	nodeID := r.opts.NodeID
 	serviceName := r.opts.ServiceName
 	old := r.node
@@ -137,7 +239,7 @@ func (r *DNSNamingRegister) Register(address string, Metadata interface{}) error
 		r.domain+".",
 		"",
 		port,
-		[]net.IP{net.ParseIP(host)},
+		[]net.IP{ip},
 		encode(&txt),
 	)
 	if err != nil {
@@ -226,7 +328,7 @@ func (r *dnsNamingWatcher) Next() ([]*naming.Update, error) {
 
 	// 两次查询之间留出最小间隔;等待期间仍然能被 Close() 打断。
 	if !r.lastQuery.IsZero() {
-		if wait := mdnsPollInterval - time.Since(r.lastQuery); wait > 0 {
+		if wait := time.Duration(mdnsPollIntervalNs.Load()) - time.Since(r.lastQuery); wait > 0 {
 			select {
 			case <-r.ctx.Done():
 				return nil, r.ctx.Err()
@@ -327,7 +429,7 @@ func (r *dnsNamingWatcher) getService() ([]*naming.Update, error) {
 		if _, ok := live[addr]; ok {
 			continue
 		}
-		if now.Sub(r.lastSeen[addr]) < mdnsGraceWindow {
+		if now.Sub(r.lastSeen[addr]) < time.Duration(mdnsGraceWindowNs.Load()) {
 			continue
 		}
 		delete(r.reported, addr)

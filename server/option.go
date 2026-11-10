@@ -1,12 +1,11 @@
 package server
 
 import (
+	"fmt"
 	"net"
 	"time"
 
 	"github.com/gmsec/micro/registry"
-
-	"github.com/xxjwxc/public/mylog"
 
 	"google.golang.org/grpc"
 )
@@ -108,18 +107,20 @@ func newOptions(opt ...Option) Options {
 	return opts
 }
 
-func (obj *Options) getListener() net.Listener {
+// getListener 返回监听套接字。监听失败时返回 error,由调用方决定如何处理,
+// 不再在库代码里用 mylog.Fatal 直接结束进程。
+func (obj *Options) getListener() (net.Listener, error) {
 	if obj.Listener == nil {
 		//起服务
 		lis, err := net.Listen("tcp", obj.Address)
 		if err != nil {
-			mylog.Fatal("failed to listen: ", err)
+			return nil, fmt.Errorf("failed to listen on %q: %w", obj.Address, err)
 		}
 		obj.Listener = lis
 		obj.Address = lis.Addr().String()
 	}
 
-	return obj.Listener
+	return obj.Listener, nil
 }
 
 func (obj *Options) setListener(lis net.Listener) bool {

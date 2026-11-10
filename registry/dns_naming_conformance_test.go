@@ -63,10 +63,15 @@ func mdnsEventually(d time.Duration, cond func() bool) bool {
 // 收不到对端主动组播的 goodbye,所以只能靠"连续一个容忍窗口都查不到"判删。
 // 测试里把容忍窗口缩短到 500ms 来验证这条链路。
 func TestMDNSConformance(t *testing.T) {
-	oldGrace, oldPoll := mdnsGraceWindow, mdnsPollInterval
-	mdnsGraceWindow = 500 * time.Millisecond
-	mdnsPollInterval = 100 * time.Millisecond
-	defer func() { mdnsGraceWindow, mdnsPollInterval = oldGrace, oldPoll }()
+	// 用 atomic 存取:后台 watcher goroutine 会并发读这两个值,
+	// 直接赋值会在 -race 下报 data race。
+	oldGrace, oldPoll := mdnsGraceWindowNs.Load(), mdnsPollIntervalNs.Load()
+	mdnsGraceWindowNs.Store(int64(500 * time.Millisecond))
+	mdnsPollIntervalNs.Store(int64(100 * time.Millisecond))
+	defer func() {
+		mdnsGraceWindowNs.Store(oldGrace)
+		mdnsPollIntervalNs.Store(oldPoll)
+	}()
 
 	service := fmt.Sprintf("conformance-mdns-%d", time.Now().UnixNano())
 
